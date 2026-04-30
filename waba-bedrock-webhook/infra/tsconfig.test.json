@@ -1,0 +1,18 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "rootDir": "..",
+    "typeRoots": ["./node_modules/@types"],
+    "baseUrl": ".",
+    "paths": {
+      "aws-cdk-lib": ["./node_modules/aws-cdk-lib"],
+      "aws-cdk-lib/*": ["./node_modules/aws-cdk-lib/*"],
+      "constructs": ["./node_modules/constructs"]
+    }
+  },
+  "include": [
+    "../tests/infra/**/*.ts",
+    "lib/**/*.ts",
+    "bin/**/*.ts"
+  ]
+}

@@ -1,0 +1,4 @@
+# Lambda runtime dependencies
+# boto3 is provided by the Lambda Python 3.12 runtime,
+# listed here for local development and testing.
+boto3

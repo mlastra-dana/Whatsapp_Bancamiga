@@ -1,0 +1,31 @@
+# Dependencies
+node_modules/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+
+# CDK
+waba-bedrock-webhook/infra/cdk.out/
+waba-bedrock-webhook/infra/dist/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Environment / secrets
+.env
+*.pem
+*.key
+
+# Python virtual environments
+venv/
+.venv/
+
+# Test artifacts
+.coverage
+htmlcov/
+.hypothesis/

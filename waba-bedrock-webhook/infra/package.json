@@ -1,0 +1,25 @@
+{
+  "name": "waba-bedrock-webhook-infra",
+  "version": "1.0.0",
+  "description": "CDK infrastructure for WABA Bedrock Webhook",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc -w",
+    "cdk": "cdk",
+    "test": "jest"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.251.0",
+    "constructs": "^10.4.2",
+    "@aws-cdk/aws-bedrock-alpha": "2.251.0-alpha.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.0",
+    "ts-node": "^10.9.2",
+    "aws-cdk": "^2.1119.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.2.0",
+    "@types/jest": "^29.5.0",
+    "@types/node": "^22.0.0"
+  }
+}
