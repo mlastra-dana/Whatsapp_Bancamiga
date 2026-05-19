@@ -29,3 +29,15 @@ venv/
 .coverage
 htmlcov/
 .hypothesis/
+
+# Google Service Account credentials
+**/danaconnect-calendar-bot*.json
+
+# Lambda bundled dependencies (installed for deployment, not source code)
+waba-bedrock-webhook/lambda-calendar/*
+!waba-bedrock-webhook/lambda-calendar/handler.py
+!waba-bedrock-webhook/lambda-calendar/availability.py
+!waba-bedrock-webhook/lambda-calendar/event_creator.py
+!waba-bedrock-webhook/lambda-calendar/google_auth_helper.py
+!waba-bedrock-webhook/lambda-calendar/validators.py
+!waba-bedrock-webhook/lambda-calendar/requirements.txt

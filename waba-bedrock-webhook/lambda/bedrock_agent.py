@@ -62,13 +62,17 @@ class BedrockAgentClient:
             ),
         )
 
-    def invoke(self, input_text: str, session_id: str) -> str:
+    def invoke(self, input_text: str, session_id: str, session_attributes: dict | None = None, prompt_session_attributes: dict | None = None) -> str:
         """
         Invoke the Bedrock Agent and return the full response text.
 
         Args:
             input_text: The user's message text.
             session_id: Session identifier for multi-turn context.
+            session_attributes: Optional dict of session attributes to pass
+                to the agent (e.g. phone number).
+            prompt_session_attributes: Optional dict of prompt session attributes
+                that the agent can reference in its responses.
 
         Returns:
             The agent's complete response as a string.
@@ -77,12 +81,20 @@ class BedrockAgentClient:
             BedrockAgentError: If the invocation fails or times out.
         """
         try:
-            response = self._client.invoke_agent(
-                agentId=self._agent_id,
-                agentAliasId=self._agent_alias_id,
-                sessionId=session_id,
-                inputText=input_text,
-            )
+            kwargs = {
+                "agentId": self._agent_id,
+                "agentAliasId": self._agent_alias_id,
+                "sessionId": session_id,
+                "inputText": input_text,
+            }
+            if session_attributes or prompt_session_attributes:
+                session_state = {}
+                if session_attributes:
+                    session_state["sessionAttributes"] = session_attributes
+                if prompt_session_attributes:
+                    session_state["promptSessionAttributes"] = prompt_session_attributes
+                kwargs["sessionState"] = session_state
+            response = self._client.invoke_agent(**kwargs)
             return extract_response_text(response["completion"])
         except ReadTimeoutError as exc:
             logger.exception(

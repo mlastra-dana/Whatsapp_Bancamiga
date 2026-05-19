@@ -1,59 +1,141 @@
-# WABA + Bedrock Knowledge Base Webhook
+# WABA Bedrock Webhook — NEXT GEN Event Bot
 
-Lambda que recibe webhooks de WhatsApp Business API (Cloud API) y responde usando una Knowledge Base de Amazon Bedrock.
+Chatbot de WhatsApp para el evento NEXT GEN de DANAconnect. Integra Amazon Bedrock Agent con Knowledge Base, Google Calendar para agendamiento, visión computacional con Amazon Nova Lite, y un panel web para monitoreo en tiempo real.
 
 ## Arquitectura
 
 ```
-WhatsApp Cloud API → API Gateway → Lambda → Bedrock Knowledge Base
-                                      ↓
-                                WhatsApp Cloud API (respuesta)
+WhatsApp Cloud API → API Gateway → Webhook Lambda → Bedrock Agent (Knowledge Base + Calendar Action Group)
+                                       ↓
+                                  ┌────┴────┐
+                                  │ Routing │
+                                  └────┬────┘
+                          ┌────────────┼────────────────┐
+                          ↓            ↓                ↓
+                   Bedrock Agent   Vision Analyzer   Calendar Lambda
+                   (KB + Calendar)  (Nova Lite)      (Google Calendar API)
+                          ↓            ↓                ↓
+                   WhatsApp Response  Image Description  Event Creation
 ```
 
-## Configuración
+## Features
 
-### Variables de entorno requeridas
+- **Knowledge Base**: Responde preguntas sobre el evento NEXT GEN (agenda, speakers, horarios, ubicación)
+- **Agendamiento**: Permite agendar reuniones de seguimiento en Google Calendar con recopilación de datos del contacto
+- **Visión Computacional**: Analiza imágenes enviadas por WhatsApp usando Amazon Nova Lite
+- **Panel de Citas**: Interfaz web para ver las reuniones agendadas
+- **Panel de Conversaciones**: Interfaz web para ver todas las interacciones del bot con identificación de contactos
+- **Envío de mensajes**: Permite enviar mensajes WhatsApp directamente desde el panel
+- **Notificaciones**: Notificaciones del navegador + Slack cuando llegan mensajes nuevos
+- **Registro completo**: Guarda todas las conversaciones en DynamoDB para análisis posterior
 
-| Variable | Descripción |
+## Estructura del Proyecto
+
+```
+waba-bedrock-webhook/
+├── lambda/                      # Webhook Lambda (handler principal)
+│   ├── handler.py               # Entry point — routing, visión, Bedrock Agent
+│   ├── bedrock_agent.py         # Cliente de Bedrock Agent
+│   ├── whatsapp.py              # Cliente WhatsApp Cloud API (envío + media)
+│   ├── session_manager.py       # Gestión de sesiones DynamoDB (con modo visión)
+│   ├── vision_analyzer.py       # Análisis de imágenes con Amazon Nova Lite
+│   ├── prompt_reader.py         # Lectura del system prompt desde S3
+│   └── requirements.txt
+├── lambda-calendar/             # Calendar Action Group Lambda
+│   ├── handler.py               # Routing de acciones del Action Group
+│   ├── availability.py          # Consulta de disponibilidad (FreeBusy API)
+│   ├── event_creator.py         # Creación de eventos en Google Calendar
+│   ├── google_auth_helper.py    # Autenticación con cuenta de servicio
+│   ├── validators.py            # Validación de fechas, horas, títulos
+│   └── requirements.txt         # + dependencias instaladas para Linux
+├── lambda-appointments/         # API para leer citas desde DynamoDB
+│   └── handler.py
+├── lambda-conversations/        # API para leer conversaciones desde DynamoDB
+│   └── handler.py
+├── lambda-send-message/         # API para enviar mensajes WhatsApp desde el panel
+│   └── handler.py
+├── panel/                       # Interfaces web (HTML standalone)
+│   ├── citas.html               # Panel de citas agendadas
+│   ├── conversaciones.html      # Panel de conversaciones con envío de mensajes
+│   ├── attendees.json           # Lista de asistentes al evento (parte 1)
+│   └── attendees2.json          # Lista de asistentes al evento (parte 2)
+├── infra/                       # CDK Infrastructure
+│   ├── lib/waba-bedrock-stack.ts  # Stack completo
+│   ├── package.json
+│   └── tsconfig.json
+└── tests/                       # Tests unitarios y property-based
+    └── unit/
+```
+
+## Despliegue
+
+### Prerrequisitos
+
+- AWS CLI configurado
+- Node.js 18+
+- Python 3.12
+- Google Cloud Service Account con delegación de dominio (para Calendar)
+
+### Variables de entorno / Parámetros CDK
+
+| Parámetro | Descripción |
 |---|---|
-| `WHATSAPP_VERIFY_TOKEN` | Token para verificación del webhook (lo defines tú) |
-| `WHATSAPP_ACCESS_TOKEN` | Token de acceso de la app de Meta |
-| `WHATSAPP_PHONE_NUMBER_ID` | ID del número de teléfono de WhatsApp Business |
-| `BEDROCK_KNOWLEDGE_BASE_ID` | ID de la Knowledge Base de Bedrock |
-| `BEDROCK_MODEL_ARN` | ARN del modelo de Bedrock (ej: `arn:aws:bedrock:us-east-1::foundation-model/anthropic.claude-3-haiku-20240307-v1:0`) |
+| `WhatsAppVerifyToken` | Token para verificación del webhook |
+| `WhatsAppAccessToken` | Token de acceso de Meta |
+| `WhatsAppPhoneNumberId` | ID del número de WhatsApp Business |
+| `TeamCalendars` | Emails de calendarios a consultar (separados por coma) |
+| `ImpersonateEmail` | Email para delegación de dominio de Google |
+| `Timezone` | Zona horaria (ej: `America/New_York`) |
 
-### Despliegue con CDK
+### Deploy
 
 ```bash
 cd infra
 npm install
-npx cdk deploy --parameters WhatsAppVerifyToken=<tu-token> \
-               --parameters WhatsAppAccessToken=<tu-access-token> \
-               --parameters WhatsAppPhoneNumberId=<tu-phone-id> \
-               --parameters BedrockKnowledgeBaseId=<tu-kb-id> \
-               --parameters BedrockModelArn=<model-arn>
+npx cdk deploy \
+  --parameters TeamCalendars="email1@domain.com,email2@domain.com" \
+  --parameters ImpersonateEmail="admin@domain.com" \
+  --parameters Timezone="America/New_York"
 ```
 
-### Configuración en Meta
+Los parámetros de WhatsApp se mantienen del deploy anterior si ya están configurados.
 
-1. En el App Dashboard de Meta, ve a **WhatsApp > Configuration**
-2. En **Webhook**, configura la Callback URL con la URL del API Gateway
-3. Usa el mismo `WHATSAPP_VERIFY_TOKEN` como Verify Token
-4. Suscríbete al campo `messages`
+### Configurar Google Calendar
 
-## Estructura
-
+1. Crear Service Account en Google Cloud Console
+2. Habilitar Google Calendar API
+3. Configurar delegación de dominio en admin.google.com
+4. Subir credenciales JSON a Secrets Manager:
+```bash
+aws secretsmanager put-secret-value \
+  --secret-id <CalendarCredentialsSecretArn> \
+  --secret-string file://service-account-key.json
 ```
-waba-bedrock-webhook/
-├── lambda/
-│   ├── handler.py          # Handler principal de la Lambda
-│   ├── whatsapp.py         # Cliente de WhatsApp Cloud API
-│   ├── bedrock_kb.py       # Cliente de Bedrock Knowledge Base
-│   └── requirements.txt    # Dependencias Python
-├── infra/
-│   ├── bin/app.ts          # Entry point CDK
-│   ├── lib/stack.ts        # Stack CDK
-│   ├── package.json
-│   └── tsconfig.json
-└── README.md
+
+## APIs Disponibles
+
+| Endpoint | Método | Descripción |
+|---|---|---|
+| `/webhook` | GET/POST | Webhook de WhatsApp |
+| `/appointments` | GET | Lista de citas agendadas |
+| `/conversations` | GET | Todas las conversaciones (filtrable por `?phone=`) |
+| `/send-message` | POST | Enviar mensaje WhatsApp (`{"phone":"...", "message":"..."}`) |
+
+## Panel Web
+
+Los archivos HTML en `panel/` son standalone y se pueden hostear en cualquier servidor estático (Amplify, S3, localhost). Se conectan a los endpoints del API Gateway.
+
+Para probar localmente:
+```bash
+cd panel
+python3 -m http.server 8080
+# Abrir http://localhost:8080/conversaciones.html
 ```
+
+## Intenciones del Bot
+
+| Intención | Trigger | Acción |
+|---|---|---|
+| Preguntas del evento | Cualquier pregunta informativa | Consulta Knowledge Base |
+| Agendar reunión | "agendar", "programar", "reservar" | Recopila datos → Calendar API |
+| Visión computacional | "visión computacional", "analizar imagen", "describir foto" | Pide imagen → Nova Lite → descripción |

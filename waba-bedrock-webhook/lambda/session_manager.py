@@ -103,3 +103,56 @@ class SessionManager:
             )
 
         return session_id
+
+    def set_mode(self, phone_number: str, mode: str | None) -> None:
+        """
+        Set or clear the session mode for a phone number.
+
+        Args:
+            phone_number: WhatsApp phone number (partition key).
+            mode: The mode value to set (e.g. "vision"), or None to clear.
+        """
+        try:
+            if mode is None:
+                self._table.update_item(
+                    Key={"phone_number": phone_number},
+                    UpdateExpression="REMOVE #mode",
+                    ExpressionAttributeNames={"#mode": "mode"},
+                )
+            else:
+                self._table.update_item(
+                    Key={"phone_number": phone_number},
+                    UpdateExpression="SET #mode = :mode",
+                    ExpressionAttributeNames={"#mode": "mode"},
+                    ExpressionAttributeValues={":mode": mode},
+                )
+        except ClientError:
+            logger.exception(
+                "DynamoDB set_mode error for phone_number=%s mode=%s",
+                phone_number,
+                mode,
+            )
+
+    def get_mode(self, phone_number: str) -> str | None:
+        """
+        Get the current session mode for a phone number.
+
+        Args:
+            phone_number: WhatsApp phone number (partition key).
+
+        Returns:
+            The mode string (e.g. "vision") or None if not set.
+        """
+        try:
+            response = self._table.get_item(
+                Key={"phone_number": phone_number},
+                ProjectionExpression="#mode",
+                ExpressionAttributeNames={"#mode": "mode"},
+            )
+            item = response.get("Item", {})
+            return item.get("mode")
+        except ClientError:
+            logger.exception(
+                "DynamoDB get_mode error for phone_number=%s", phone_number
+            )
+            return None

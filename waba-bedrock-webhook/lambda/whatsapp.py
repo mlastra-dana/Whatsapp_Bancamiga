@@ -18,6 +18,10 @@ class WhatsAppSendError(Exception):
     """Raised when sending a WhatsApp message fails after retry."""
 
 
+class WhatsAppMediaError(Exception):
+    """Raised when media retrieval or download fails."""
+
+
 def build_message_payload(to: str, text: str) -> dict:
     """
     Build the WhatsApp Cloud API message payload.
@@ -120,3 +124,59 @@ class WhatsAppClient:
     def _is_transient_error(status: int) -> bool:
         """Return True for HTTP 429 or 5xx status codes."""
         return status == 429 or 500 <= status <= 599
+
+    def get_media_url(self, media_id: str) -> str:
+        """
+        Retrieve the download URL for a WhatsApp media item.
+
+        Calls GET https://graph.facebook.com/v21.0/{media_id} with auth header.
+
+        Args:
+            media_id: The WhatsApp media ID from the incoming message.
+
+        Returns:
+            The media download URL.
+
+        Raises:
+            WhatsAppMediaError: If the API call fails or no URL is returned.
+        """
+        url = f"https://graph.facebook.com/v21.0/{media_id}"
+        response = self._http.request("GET", url, headers=self._headers)
+
+        if response.status < 200 or response.status >= 300:
+            body_text = response.data.decode("utf-8", errors="replace")
+            raise WhatsAppMediaError(
+                f"Media URL retrieval failed status={response.status}: {body_text}"
+            )
+
+        data = json.loads(response.data.decode("utf-8"))
+        media_url = data.get("url")
+        if not media_url:
+            raise WhatsAppMediaError("No URL in media API response")
+        return media_url
+
+    def download_media(self, media_url: str) -> bytes:
+        """
+        Download binary media content from a WhatsApp media URL.
+
+        Args:
+            media_url: The URL returned by get_media_url().
+
+        Returns:
+            Raw binary content of the media file.
+
+        Raises:
+            WhatsAppMediaError: If the download fails.
+        """
+        response = self._http.request(
+            "GET",
+            media_url,
+            headers={"Authorization": self._headers["Authorization"]},
+        )
+
+        if response.status < 200 or response.status >= 300:
+            raise WhatsAppMediaError(
+                f"Media download failed status={response.status}"
+            )
+
+        return response.data

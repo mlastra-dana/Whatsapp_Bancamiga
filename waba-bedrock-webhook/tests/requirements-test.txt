@@ -2,3 +2,5 @@ pytest>=7.0
 hypothesis>=6.0
 moto>=5.0
 pytest-mock>=3.0
+google-auth>=2.0
+google-api-python-client>=2.0

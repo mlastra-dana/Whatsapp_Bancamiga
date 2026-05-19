@@ -86,8 +86,8 @@ class TestExtractTextMessages:
         assert result[0]["from"] == "111"
         assert result[1]["from"] == "222"
 
-    def test_non_text_messages_filtered(self):
-        """Non-text messages (image, audio, etc.) are excluded."""
+    def test_non_text_messages_converted_to_placeholder(self):
+        """Non-text messages (image, video, etc.) are converted to placeholder text."""
         body = {
             "entry": [
                 {
@@ -115,8 +115,11 @@ class TestExtractTextMessages:
             ]
         }
         result = extract_text_messages(body)
-        assert len(result) == 1
-        assert result[0]["from"] == "222"
+        assert len(result) == 2
+        assert result[0]["from"] == "111"
+        assert result[0]["text"] == "[El usuario envió un archivo de tipo image]"
+        assert result[1]["from"] == "222"
+        assert result[1]["text"] == "Hello"
 
     def test_empty_entry(self):
         """A payload with no entries returns an empty list."""
@@ -147,6 +150,7 @@ class TestHandleMessage:
 
         self.mock_session_mgr = MagicMock()
         self.mock_session_mgr.get_or_create_session.return_value = "sess-123"
+        self.mock_session_mgr.get_mode.return_value = None
 
         self.mock_prompt = MagicMock()
         self.mock_prompt.get_prompt.return_value = "System prompt"
@@ -156,10 +160,13 @@ class TestHandleMessage:
 
         self.mock_whatsapp = MagicMock()
 
+        self.mock_vision = MagicMock()
+
         monkeypatch.setattr(handler, "session_manager", self.mock_session_mgr)
         monkeypatch.setattr(handler, "prompt_reader", self.mock_prompt)
         monkeypatch.setattr(handler, "bedrock_client", self.mock_bedrock)
         monkeypatch.setattr(handler, "whatsapp_client", self.mock_whatsapp)
+        monkeypatch.setattr(handler, "vision_analyzer", self.mock_vision)
 
     def _make_text_payload(self, from_number="5491100000000", text="Hola"):
         return {
@@ -220,7 +227,7 @@ class TestHandleMessage:
         assert result["statusCode"] == 200
 
     def test_non_text_only_returns_200(self):
-        """A payload with only non-text messages returns HTTP 200."""
+        """A payload with only non-text messages returns HTTP 200 and processes placeholder."""
         body = {
             "entry": [
                 {
@@ -243,8 +250,11 @@ class TestHandleMessage:
         }
         result = handle_message(body)
         assert result["statusCode"] == 200
-        self.mock_bedrock.invoke.assert_not_called()
-        self.mock_whatsapp.send_text_message.assert_not_called()
+        # Image messages are now converted to placeholder text and processed
+        self.mock_bedrock.invoke.assert_called_once_with(
+            "[El usuario envió un archivo de tipo image]", "sess-123"
+        )
+        self.mock_whatsapp.send_text_message.assert_called_once()
 
     def test_multiple_messages_processed_individually(self):
         """Each text message in the payload is processed separately."""
@@ -345,6 +355,7 @@ class TestLambdaHandler:
 
         mock_session_mgr = MagicMock()
         mock_session_mgr.get_or_create_session.return_value = "sess-abc"
+        mock_session_mgr.get_mode.return_value = None
 
         mock_prompt = MagicMock()
         mock_prompt.get_prompt.return_value = "System prompt"
@@ -353,6 +364,8 @@ class TestLambdaHandler:
         mock_bedrock.invoke.return_value = "Agent reply"
 
         mock_whatsapp = MagicMock()
+
+        mock_vision = MagicMock()
 
         payload = make_whatsapp_text_payload(
             from_number="5491155550000", message_text="Hola mundo"
@@ -366,6 +379,7 @@ class TestLambdaHandler:
                 handler.prompt_reader = mock_prompt
                 handler.bedrock_client = mock_bedrock
                 handler.whatsapp_client = mock_whatsapp
+                handler.vision_analyzer = mock_vision
 
             mock_init.side_effect = _fake_init
 

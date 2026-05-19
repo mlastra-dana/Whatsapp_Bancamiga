@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversaciones — NEXT GEN</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #f5f7fa;
+            color: #333;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .header h1 { font-size: 24px; color: #1a1a2e; }
+        .header p { color: #666; margin-top: 5px; }
+        .stats {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .stat-card {
+            background: white;
+            border-radius: 8px;
+            padding: 15px 20px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            flex: 1;
+            min-width: 150px;
+        }
+        .stat-card .number { font-size: 28px; font-weight: bold; color: #2563eb; }
+        .stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; }
+        .toolbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            gap: 10px;
+        }
+        .refresh-btn {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .refresh-btn:hover { background: #1d4ed8; }
+        .last-updated { font-size: 12px; color: #999; }
+        .layout {
+            display: flex;
+            gap: 20px;
+            height: calc(100vh - 250px);
+            min-height: 400px;
+        }
+        .contacts-panel {
+            width: 300px;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            overflow-y: auto;
+        }
+        .contact-item {
+            padding: 12px 15px;
+            border-bottom: 1px solid #eee;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .contact-item:hover { background: #f0f4ff; }
+        .contact-item.active { background: #e0e7ff; border-left: 3px solid #2563eb; }
+        .contact-item .phone { font-weight: 600; font-size: 14px; }
+        .contact-item .meta { font-size: 12px; color: #666; margin-top: 3px; }
+        .contact-item .last-msg { font-size: 12px; color: #999; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .chat-panel {
+            flex: 1;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+        }
+        .chat-header {
+            padding: 15px;
+            border-bottom: 1px solid #eee;
+            font-weight: 600;
+        }
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 15px;
+        }
+        .chat-input {
+            display: flex;
+            gap: 8px;
+            padding: 12px 15px;
+            border-top: 1px solid #eee;
+        }
+        .chat-input input {
+            flex: 1;
+            padding: 10px 14px;
+            border: 1px solid #ddd;
+            border-radius: 20px;
+            font-size: 14px;
+            outline: none;
+        }
+        .chat-input input:focus { border-color: #2563eb; }
+        .chat-input button {
+            background: #25d366;
+            color: white;
+            border: none;
+            padding: 10px 18px;
+            border-radius: 20px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .chat-input button:hover { background: #1da851; }
+        .chat-input button:disabled { background: #ccc; cursor: not-allowed; }
+        .message {
+            max-width: 75%;
+            padding: 10px 14px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .message.inbound {
+            background: #e8f5e9;
+            align-self: flex-start;
+            border-bottom-left-radius: 4px;
+        }
+        .message.outbound {
+            background: #e3f2fd;
+            align-self: flex-end;
+            margin-left: auto;
+            border-bottom-right-radius: 4px;
+        }
+        .message .time {
+            font-size: 11px;
+            color: #999;
+            margin-top: 4px;
+        }
+        .message .direction {
+            font-size: 10px;
+            color: #666;
+            text-transform: uppercase;
+            font-weight: 600;
+        }
+        .chat-messages {
+            display: flex;
+            flex-direction: column;
+        }
+        .empty-state {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #999;
+            font-size: 14px;
+        }
+        @media (max-width: 768px) {
+            .layout { flex-direction: column; height: auto; }
+            .contacts-panel { width: 100%; max-height: 200px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>💬 Conversaciones — NEXT GEN</h1>
+        <p>Registro de interacciones del chatbot WhatsApp</p>
+    </div>
+
+    <div class="stats">
+        <div class="stat-card">
+            <div class="number" id="total-contacts">-</div>
+            <div class="label">Contactos</div>
+        </div>
+        <div class="stat-card">
+            <div class="number" id="total-messages">-</div>
+            <div class="label">Mensajes totales</div>
+        </div>
+        <div class="stat-card">
+            <div class="number" id="today-messages">-</div>
+            <div class="label">Mensajes hoy</div>
+        </div>
+    </div>
+
+    <div class="toolbar">
+        <button class="refresh-btn" onclick="loadConversations()">🔄 Actualizar</button>
+        <span class="last-updated" id="last-updated"></span>
+    </div>
+
+    <div class="layout">
+        <div class="contacts-panel" id="contacts-list">
+            <div class="empty-state">Cargando...</div>
+        </div>
+        <div class="chat-panel">
+            <div class="chat-header" id="chat-header">Selecciona un contacto</div>
+            <div class="chat-messages" id="chat-messages">
+                <div class="empty-state">Selecciona un contacto para ver la conversación</div>
+            </div>
+            <div class="chat-input" id="chat-input" style="display:none;">
+                <input type="text" id="message-input" placeholder="Escribe un mensaje..." onkeypress="if(event.key==='Enter')sendMessage()">
+                <button onclick="sendMessage()" id="send-btn">Enviar</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = 'https://lb43yesgh3.execute-api.us-east-1.amazonaws.com/prod/conversations';
+        const SEND_API_URL = 'https://lb43yesgh3.execute-api.us-east-1.amazonaws.com/prod/send-message';
+        const ATTENDEES_URL_1 = 'attendees.json';
+        const ATTENDEES_URL_2 = 'attendees2.json';
+
+        let allMessages = [];
+        let contacts = {};
+        let attendeesMap = {}; // phone -> attendee info
+        let selectedPhone = null;
+
+        async function loadAttendees() {
+            try {
+                const [r1, r2] = await Promise.all([
+                    fetch(ATTENDEES_URL_1).then(r => r.json()).catch(() => []),
+                    fetch(ATTENDEES_URL_2).then(r => r.json()).catch(() => []),
+                ]);
+                const all = [...r1, ...r2];
+                all.forEach(a => {
+                    // Normalize phone: remove leading 58 and add 58 prefix for matching
+                    const phone = a.phone || '';
+                    attendeesMap[phone] = a;
+                    // Also map without country code variations
+                    if (phone.startsWith('58')) {
+                        attendeesMap[phone.substring(2)] = a;
+                    }
+                });
+            } catch (e) {
+                console.warn('Could not load attendees:', e);
+            }
+        }
+
+        function getAttendeeName(phone) {
+            const a = attendeesMap[phone] || attendeesMap[phone.replace(/^\+/, '')];
+            if (a) return `${a.first_name} ${a.last_name}`;
+            return null;
+        }
+
+        function getAttendeeInfo(phone) {
+            return attendeesMap[phone] || attendeesMap[phone.replace(/^\+/, '')] || null;
+        }
+
+        let previousMessageCount = 0;
+        let notificationsEnabled = false;
+
+        // Request notification permission on first interaction
+        document.addEventListener('click', () => {
+            if (Notification.permission === 'default') {
+                Notification.requestPermission().then(p => {
+                    notificationsEnabled = (p === 'granted');
+                });
+            }
+        }, { once: true });
+
+        if (Notification.permission === 'granted') notificationsEnabled = true;
+
+        function playNotificationSound() {
+            // Simple beep using Web Audio API
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const osc = ctx.createOscillator();
+                const gain = ctx.createGain();
+                osc.connect(gain);
+                gain.connect(ctx.destination);
+                osc.frequency.value = 800;
+                gain.gain.value = 0.3;
+                osc.start();
+                osc.stop(ctx.currentTime + 0.15);
+            } catch(e) {}
+        }
+
+        function showBrowserNotification(phone, message) {
+            if (!notificationsEnabled) return;
+            const name = getAttendeeName(phone) || phone;
+            new Notification(`💬 Nuevo mensaje - ${name}`, {
+                body: message.substring(0, 100),
+                icon: '💬',
+            });
+        }
+
+        async function loadConversations() {
+            try {
+                const response = await fetch(API_URL);
+                const newMessages = await response.json();
+                
+                // Check for new inbound messages
+                const newInbound = newMessages.filter(m => m.direction === 'inbound');
+                if (previousMessageCount > 0 && newInbound.length > previousMessageCount) {
+                    const diff = newInbound.length - previousMessageCount;
+                    // Get the newest messages
+                    const newest = newInbound.slice(0, diff);
+                    newest.forEach(msg => {
+                        playNotificationSound();
+                        showBrowserNotification(msg.phone_number, msg.message || '');
+                    });
+                    // Update page title with count
+                    document.title = `(${diff}) 💬 Conversaciones — NEXT GEN`;
+                    setTimeout(() => { document.title = '💬 Conversaciones — NEXT GEN'; }, 5000);
+                }
+                previousMessageCount = newInbound.length;
+                
+                allMessages = newMessages;
+                processMessages();
+                renderContacts();
+                updateStats();
+                document.getElementById('last-updated').textContent =
+                    'Actualizado: ' + new Date().toLocaleTimeString('es');
+            } catch (error) {
+                console.error('Error:', error);
+                document.getElementById('contacts-list').innerHTML =
+                    '<div class="empty-state">Error al cargar conversaciones</div>';
+            }
+        }
+
+        function processMessages() {
+            contacts = {};
+            allMessages.forEach(msg => {
+                const phone = msg.phone_number;
+                if (!contacts[phone]) {
+                    contacts[phone] = {
+                        phone: phone,
+                        messages: [],
+                        lastMessage: '',
+                        lastTime: '',
+                        messageCount: 0,
+                    };
+                }
+                contacts[phone].messages.push(msg);
+                contacts[phone].messageCount++;
+            });
+
+            // Sort messages within each contact by timestamp
+            Object.values(contacts).forEach(c => {
+                c.messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+                const last = c.messages[c.messages.length - 1];
+                c.lastMessage = last.message || '';
+                c.lastTime = last.timestamp || '';
+            });
+        }
+
+        function renderContacts() {
+            const list = document.getElementById('contacts-list');
+            const sorted = Object.values(contacts).sort((a, b) =>
+                b.lastTime.localeCompare(a.lastTime)
+            );
+
+            if (sorted.length === 0) {
+                list.innerHTML = '<div class="empty-state">No hay conversaciones aún</div>';
+                return;
+            }
+
+            list.innerHTML = sorted.map(c => {
+                const timeStr = c.lastTime ? new Date(c.lastTime).toLocaleString('es', {
+                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+                }) : '';
+                const name = getAttendeeName(c.phone);
+                const displayName = name || c.phone;
+                const info = getAttendeeInfo(c.phone);
+                const company = info ? info.company : '';
+                return `<div class="contact-item" onclick="selectContact('${c.phone}')">
+                    <div class="phone">${name ? '👤' : '📱'} ${displayName}</div>
+                    <div class="meta">${company ? company + ' · ' : ''}${c.messageCount} msgs · ${timeStr}</div>
+                    <div class="last-msg">${c.lastMessage.substring(0, 50)}</div>
+                </div>`;
+            }).join('');
+        }
+
+        function selectContact(phone) {
+            // Highlight active contact
+            document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('active'));
+            event.currentTarget?.classList.add('active');
+
+            const contact = contacts[phone];
+            if (!contact) return;
+
+            selectedPhone = phone;
+            document.getElementById('chat-input').style.display = 'flex';
+
+            const info = getAttendeeInfo(phone);
+            const name = getAttendeeName(phone);
+            let headerText = `📱 ${phone} (${contact.messageCount} mensajes)`;
+            if (info) {
+                headerText = `👤 ${name} — ${info.company} — ${info.role} — ${phone}`;
+            }
+            document.getElementById('chat-header').textContent = headerText;
+
+            const messagesDiv = document.getElementById('chat-messages');
+            messagesDiv.innerHTML = contact.messages.map(msg => {
+                const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('es', {
+                    hour: '2-digit', minute: '2-digit'
+                }) : '';
+                const date = msg.timestamp ? new Date(msg.timestamp).toLocaleDateString('es', {
+                    month: 'short', day: 'numeric'
+                }) : '';
+                const dir = msg.direction === 'inbound' ? '👤 Usuario' : '🤖 Bot';
+                return `<div class="message ${msg.direction || 'inbound'}">
+                    <div class="direction">${dir}</div>
+                    <div>${msg.message || ''}</div>
+                    <div class="time">${date} ${time}</div>
+                </div>`;
+            }).join('');
+
+            // Scroll to bottom
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+        }
+
+        function updateStats() {
+            const now = new Date();
+            const todayStr = now.toISOString().split('T')[0];
+
+            document.getElementById('total-contacts').textContent = Object.keys(contacts).length;
+            document.getElementById('total-messages').textContent = allMessages.length;
+
+            const todayMsgs = allMessages.filter(m => m.timestamp && m.timestamp.startsWith(todayStr));
+            document.getElementById('today-messages').textContent = todayMsgs.length;
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const btn = document.getElementById('send-btn');
+            const message = input.value.trim();
+            
+            if (!message || !selectedPhone) return;
+            
+            btn.disabled = true;
+            btn.textContent = '...';
+            
+            try {
+                const response = await fetch(SEND_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone: selectedPhone, message: message }),
+                });
+                
+                if (response.ok) {
+                    input.value = '';
+                    // Add message to UI immediately
+                    const messagesDiv = document.getElementById('chat-messages');
+                    const now = new Date();
+                    messagesDiv.innerHTML += `<div class="message outbound">
+                        <div class="direction">✍️ Manual</div>
+                        <div>${message}</div>
+                        <div class="time">${now.toLocaleDateString('es', {month:'short',day:'numeric'})} ${now.toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'})}</div>
+                    </div>`;
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                } else {
+                    const err = await response.json();
+                    alert('Error: ' + (err.error || 'No se pudo enviar'));
+                }
+            } catch (e) {
+                alert('Error de conexión: ' + e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Enviar';
+            }
+        }
+
+        // Load on page load and auto-refresh every 30 seconds
+        loadAttendees().then(() => loadConversations());
+        setInterval(loadConversations, 30000);
+    </script>
+</body>
+</html>
