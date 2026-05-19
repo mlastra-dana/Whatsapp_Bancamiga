@@ -139,3 +139,45 @@ python3 -m http.server 8080
 | Preguntas del evento | Cualquier pregunta informativa | Consulta Knowledge Base |
 | Agendar reunión | "agendar", "programar", "reservar" | Recopila datos → Calendar API |
 | Visión computacional | "visión computacional", "analizar imagen", "describir foto" | Pide imagen → Nova Lite → descripción |
+
+
+## Cambiar de cuenta WhatsApp Business (WABA)
+
+Si necesitas conectar este bot a un número de WhatsApp diferente:
+
+### 1. Obtener las credenciales del nuevo número
+
+En [Meta Business Suite](https://business.facebook.com) → tu app → WhatsApp → API Setup:
+- **Phone Number ID**: el ID del nuevo número
+- **Access Token**: genera un token permanente (o temporal para pruebas)
+- **Verify Token**: el que tú definas para verificar el webhook
+
+### 2. Actualizar los parámetros en el deploy
+
+```bash
+cd infra
+npx cdk deploy \
+  --parameters WhatsAppVerifyToken="nuevo-verify-token" \
+  --parameters WhatsAppAccessToken="nuevo-access-token" \
+  --parameters WhatsAppPhoneNumberId="nuevo-phone-number-id" \
+  --parameters TeamCalendars="email@domain.com" \
+  --parameters ImpersonateEmail="admin@domain.com" \
+  --parameters Timezone="America/New_York"
+```
+
+### 3. Configurar el webhook en Meta
+
+1. En Meta Business Suite → tu app → WhatsApp → Configuration → Webhook
+2. **Callback URL**: usa el output `WebhookEndpointUrl` del deploy (ej: `https://xxx.execute-api.us-east-1.amazonaws.com/prod/webhook`)
+3. **Verify Token**: el mismo que pusiste en `WhatsAppVerifyToken`
+4. Suscríbete al campo `messages`
+
+### 4. Verificar
+
+Envía un mensaje al nuevo número de WhatsApp y verifica que el bot responda.
+
+### Notas
+
+- Los parámetros de WhatsApp se almacenan como variables de entorno en la Lambda (no en Secrets Manager)
+- Si cambias de número, las sesiones anteriores en DynamoDB seguirán ahí pero no afectan al nuevo número
+- El Access Token de Meta expira — para producción usa un System User Token (permanente) desde Meta Business Settings → System Users
