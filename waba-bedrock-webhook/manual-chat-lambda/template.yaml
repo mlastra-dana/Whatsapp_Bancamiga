@@ -1,0 +1,75 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Manual WhatsApp chat logger backend without bot responses.
+
+Parameters:
+  WhatsAppPhoneNumberId:
+    Type: String
+    Description: Meta WhatsApp Phone Number ID.
+  WhatsAppAccessToken:
+    Type: String
+    NoEcho: true
+    Description: Meta WhatsApp access token.
+  WhatsAppVerifyToken:
+    Type: String
+    NoEcho: true
+    Description: Token used to verify the WhatsApp webhook.
+  CorsOrigin:
+    Type: String
+    Default: '*'
+    Description: Allowed panel origin for CORS.
+
+Resources:
+  ConversationsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: phone_number
+          AttributeType: S
+        - AttributeName: timestamp
+          AttributeType: S
+      KeySchema:
+        - AttributeName: phone_number
+          KeyType: HASH
+        - AttributeName: timestamp
+          KeyType: RANGE
+
+  ManualChatFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      Runtime: python3.12
+      Handler: handler.lambda_handler
+      CodeUri: .
+      Timeout: 30
+      MemorySize: 256
+      Environment:
+        Variables:
+          CONVERSATIONS_TABLE_NAME: !Ref ConversationsTable
+          WHATSAPP_PHONE_NUMBER_ID: !Ref WhatsAppPhoneNumberId
+          WHATSAPP_ACCESS_TOKEN: !Ref WhatsAppAccessToken
+          WHATSAPP_VERIFY_TOKEN: !Ref WhatsAppVerifyToken
+          CORS_ORIGIN: !Ref CorsOrigin
+      Policies:
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ConversationsTable
+      FunctionUrlConfig:
+        AuthType: NONE
+        Cors:
+          AllowOrigins:
+            - !Ref CorsOrigin
+          AllowMethods:
+            - GET
+            - POST
+            - OPTIONS
+          AllowHeaders:
+            - content-type
+            - authorization
+
+Outputs:
+  ManualChatFunctionUrl:
+    Description: Use this value as VITE_API_URL in Amplify.
+    Value: !GetAtt ManualChatFunctionUrl.FunctionUrl
+  ConversationsTableName:
+    Description: DynamoDB table storing conversations.
+    Value: !Ref ConversationsTable

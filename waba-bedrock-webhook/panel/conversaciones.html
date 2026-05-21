@@ -3,265 +3,971 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conversaciones — NEXT GEN</title>
+    <title>Example Banking — ChattLogger</title>
     <style>
+        :root {
+            --violet: #4B16B6;
+            --purple: #6D28E0;
+            --lilac: #A779FF;
+            --navy: #0F0F1F;
+            --lavender: #F3EDFF;
+            --surface: #ffffff;
+            --surface-muted: #faf8ff;
+            --border: #e5dcf7;
+            --text: #161525;
+            --muted: #68647a;
+            --success: #18a058;
+            --danger: #b42318;
+        }
+
         * { margin: 0; padding: 0; box-sizing: border-box; }
+
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #f5f7fa;
-            color: #333;
-            padding: 20px;
+            height: 100vh;
+            background: var(--lavender);
+            color: var(--text);
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            overflow: hidden;
         }
-        .header {
-            text-align: center;
-            margin-bottom: 30px;
-        }
-        .header h1 { font-size: 24px; color: #1a1a2e; }
-        .header p { color: #666; margin-top: 5px; }
-        .stats {
+
+        .app-shell {
+            height: 100vh;
             display: flex;
-            gap: 15px;
-            margin-bottom: 20px;
-            flex-wrap: wrap;
+            flex-direction: column;
+            overflow: hidden;
         }
-        .stat-card {
-            background: white;
-            border-radius: 8px;
-            padding: 15px 20px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            flex: 1;
-            min-width: 150px;
-        }
-        .stat-card .number { font-size: 28px; font-weight: bold; color: #2563eb; }
-        .stat-card .label { font-size: 12px; color: #666; text-transform: uppercase; }
-        .toolbar {
+
+        .welcome-screen {
+            min-height: 100vh;
+            background:
+                linear-gradient(180deg, var(--violet) 0 34%, var(--lavender) 34% 100%);
             display: flex;
-            justify-content: space-between;
             align-items: center;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
+            justify-content: center;
+            padding: 32px;
+        }
+
+        .welcome-card {
+            width: min(1040px, 100%);
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 28px 80px rgba(15, 15, 31, 0.18);
+            padding: 44px;
+            display: grid;
+            grid-template-columns: 1fr 320px;
+            gap: 44px;
+            align-items: center;
+        }
+
+        .welcome-logo {
+            width: 280px;
+            height: 82px;
+            object-fit: contain;
+            object-position: left center;
+            display: block;
+            margin-bottom: 24px;
+        }
+
+        .welcome-card h1 {
+            color: var(--navy);
+            font-size: 34px;
+            line-height: 1.1;
+            margin-bottom: 28px;
+        }
+
+        .welcome-steps {
+            display: grid;
+            gap: 18px;
+            margin-bottom: 28px;
+        }
+
+        .welcome-step {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+            color: var(--text);
+            font-size: 16px;
+            font-weight: 650;
+        }
+
+        .step-number {
+            width: 34px;
+            height: 34px;
+            border: 1px solid var(--navy);
+            border-radius: 999px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex: 0 0 auto;
+            font-size: 14px;
+        }
+
+        .remember-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: var(--muted);
+            font-size: 14px;
+            font-weight: 600;
+            margin-bottom: 22px;
+        }
+
+        .remember-row input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--violet);
+        }
+
+        .welcome-visual {
+            min-height: 320px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .qr-card {
+            width: min(320px, 100%);
+            aspect-ratio: 1;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            box-shadow: 0 16px 42px rgba(15, 15, 31, 0.14);
+            padding: 22px;
+            position: relative;
+        }
+
+        .qr-code {
+            width: 100%;
+            height: 100%;
+            background: #fff;
+            border: 14px solid #fff;
+            display: grid;
+            grid-template-columns: repeat(29, 1fr);
+            grid-template-rows: repeat(29, 1fr);
+            gap: 3px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .qr-module {
+            background: transparent;
+            border-radius: 1px;
+        }
+
+        .qr-module.on { background: #1d1630; }
+        .qr-module.finder { background: #1d1630; }
+        .qr-module.finder-light { background: #fff; }
+
+        .qr-center {
+            position: absolute;
+            z-index: 2;
+            inset: 50% auto auto 50%;
+            width: 82px;
+            height: 82px;
+            transform: translate(-50%, -50%);
+            background: #fff;
+            border-radius: 999px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 12px 28px rgba(15, 15, 31, 0.18);
+        }
+
+        .qr-center svg {
+            width: 42px;
+            height: 42px;
+            stroke: var(--violet);
+        }
+
+        .topbar {
+            background: var(--surface);
+            border-bottom: 1px solid var(--border);
+            padding: 7px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
+            flex: 0 0 auto;
+        }
+
+        .topbar-actions {
+            display: flex;
+            align-items: center;
             gap: 10px;
         }
-        .refresh-btn {
-            background: #2563eb;
-            color: white;
-            border: none;
-            padding: 8px 16px;
+
+        .brand-lockup {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            min-width: 0;
+        }
+
+        .brand-logo {
+            width: 210px;
+            height: 56px;
+            object-fit: contain;
+            object-position: left center;
+            display: block;
+        }
+
+        .product-title {
+            border-left: 1px solid var(--border);
+            padding-left: 18px;
+            min-width: 0;
+        }
+
+        .product-title h1 {
+            color: var(--navy);
+            font-size: 21px;
+            line-height: 1.2;
+            font-weight: 750;
+        }
+
+        .main {
+            padding: 10px 18px 14px;
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            min-height: 0;
+            overflow: hidden;
+        }
+
+        .toolbar {
+            display: flex;
+            justify-content: flex-start;
+            align-items: center;
+            margin-bottom: 8px;
+            gap: 12px;
+            flex: 0 0 auto;
+        }
+
+        .toolbar-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            width: 320px;
+            flex-wrap: nowrap;
+        }
+
+        .icon-btn {
+            width: 36px;
+            height: 36px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            background: var(--surface);
+            color: var(--violet);
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 17px;
+            line-height: 1;
+            flex: 0 0 auto;
+        }
+
+        .icon-btn:hover {
+            background: var(--surface-muted);
+            border-color: var(--lilac);
+        }
+
+        .primary-btn,
+        .secondary-btn {
+            min-height: 36px;
             border-radius: 6px;
             cursor: pointer;
             font-size: 14px;
+            font-weight: 650;
+            padding: 0 13px;
+            font-family: inherit;
         }
-        .refresh-btn:hover { background: #1d4ed8; }
-        .last-updated { font-size: 12px; color: #999; }
+
+        .primary-btn {
+            background: var(--violet);
+            color: #fff;
+            border: 0;
+        }
+
+        .primary-btn:hover { background: var(--purple); }
+
+        .secondary-btn {
+            background: var(--surface);
+            color: var(--violet);
+            border: 1px solid var(--border);
+        }
+
+        .secondary-btn:hover {
+            background: var(--surface-muted);
+            border-color: var(--lilac);
+        }
+
+        .logout-btn {
+            min-height: 34px;
+            padding: 0 14px;
+        }
+
+        .search-input {
+            width: auto;
+            flex: 1;
+            height: 36px;
+            padding: 0 12px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 14px;
+            outline: none;
+            color: var(--text);
+            background: var(--surface);
+        }
+
+        .search-input:focus,
+        textarea:focus,
+        .field input:focus {
+            border-color: var(--lilac);
+            box-shadow: 0 0 0 3px rgba(167, 121, 255, 0.18);
+        }
+
         .layout {
             display: flex;
-            gap: 20px;
-            height: calc(100vh - 250px);
-            min-height: 400px;
+            gap: 16px;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
         }
-        .contacts-panel {
-            width: 300px;
-            background: white;
+
+        .contacts-panel,
+        .chat-panel {
+            background: var(--surface);
+            border: 1px solid var(--border);
             border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-            overflow-y: auto;
+            overflow: hidden;
         }
+
+        .contacts-panel {
+            width: 320px;
+            overflow-y: auto;
+            min-height: 0;
+        }
+
         .contact-item {
+            width: 100%;
+            text-align: left;
+            background: var(--surface);
+            border: 0;
             padding: 12px 15px;
-            border-bottom: 1px solid #eee;
+            border-bottom: 1px solid var(--border);
             cursor: pointer;
             transition: background 0.2s;
         }
-        .contact-item:hover { background: #f0f4ff; }
-        .contact-item.active { background: #e0e7ff; border-left: 3px solid #2563eb; }
-        .contact-item .phone { font-weight: 600; font-size: 14px; }
-        .contact-item .meta { font-size: 12px; color: #666; margin-top: 3px; }
-        .contact-item .last-msg { font-size: 12px; color: #999; margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+        .contact-item:hover { background: var(--surface-muted); }
+        .contact-item.active { background: var(--lavender); border-left: 3px solid var(--violet); }
+        .contact-item .phone { font-weight: 650; font-size: 14px; color: var(--text); }
+        .contact-item .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
+        .contact-item .last-msg { font-size: 12px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
         .chat-panel {
             flex: 1;
-            background: white;
-            border-radius: 8px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            display: flex;
+            flex-direction: column;
+            min-width: 0;
+            min-height: 0;
+        }
+
+        .chat-header {
+            min-height: 54px;
+            padding: 10px 14px 10px 18px;
+            border-bottom: 1px solid var(--border);
+            background: linear-gradient(180deg, #ffffff 0%, var(--surface-muted) 100%);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+            color: var(--navy);
+            font-weight: 650;
+        }
+
+        .chat-title {
+            min-width: 0;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            display: block;
+            font-size: 16px;
+            font-weight: 750;
+        }
+
+        .chat-subtitle {
+            display: block;
+            margin-top: 2px;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 500;
+        }
+
+        .chat-header .secondary-btn {
+            min-height: 30px;
+            padding: 0 10px;
+            font-size: 12px;
+            line-height: 1;
+            flex: 0 0 auto;
+            border-radius: 999px;
+            white-space: nowrap;
+            background: transparent;
+            color: var(--violet);
+            border-color: var(--border);
+            font-weight: 650;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            min-height: 0;
+            overflow-y: auto;
+            padding: 18px 24px;
+            background:
+                radial-gradient(circle at 24px 24px, rgba(255, 255, 255, 0.75) 1px, transparent 2px),
+                linear-gradient(135deg, rgba(167, 121, 255, 0.08) 25%, transparent 25%, transparent 50%, rgba(167, 121, 255, 0.08) 50%, rgba(167, 121, 255, 0.08) 75%, transparent 75%),
+                #fbfaff;
+            background-size: 52px 52px, 44px 44px;
             display: flex;
             flex-direction: column;
         }
-        .chat-header {
-            padding: 15px;
-            border-bottom: 1px solid #eee;
-            font-weight: 600;
-        }
-        .chat-messages {
-            flex: 1;
-            overflow-y: auto;
-            padding: 15px;
-        }
+
         .chat-input {
             display: flex;
             gap: 8px;
-            padding: 12px 15px;
-            border-top: 1px solid #eee;
-        }
-        .chat-input input {
-            flex: 1;
             padding: 10px 14px;
-            border: 1px solid #ddd;
-            border-radius: 20px;
+            border-top: 1px solid var(--border);
+        }
+
+        .chat-input textarea {
+            flex: 1;
+            min-height: 38px;
+            max-height: 110px;
+            padding: 9px 14px;
+            border: 1px solid var(--border);
+            border-radius: 18px;
             font-size: 14px;
             outline: none;
+            resize: vertical;
+            font-family: inherit;
         }
-        .chat-input input:focus { border-color: #2563eb; }
+
         .chat-input button {
-            background: #25d366;
-            color: white;
-            border: none;
-            padding: 10px 18px;
             border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            font-weight: 600;
+            min-height: 38px;
+            min-width: 86px;
         }
-        .chat-input button:hover { background: #1da851; }
-        .chat-input button:disabled { background: #ccc; cursor: not-allowed; }
+
+        .send-status {
+            padding: 0 15px 10px;
+            color: var(--muted);
+            font-size: 12px;
+            min-height: 22px;
+        }
+
+        .send-status.error { color: var(--danger); }
+        .send-status.success { color: var(--success); }
+
         .message {
-            max-width: 75%;
-            padding: 10px 14px;
-            border-radius: 12px;
-            margin-bottom: 8px;
+            max-width: min(640px, 70%);
+            padding: 10px 13px;
+            border-radius: 8px;
+            margin-bottom: 12px;
             font-size: 14px;
-            line-height: 1.4;
+            line-height: 1.38;
+            word-break: break-word;
+            white-space: pre-wrap;
+            box-shadow: 0 1px 3px rgba(15, 15, 31, 0.12);
         }
+
         .message.inbound {
-            background: #e8f5e9;
+            background: var(--surface);
+            border: 1px solid var(--border);
             align-self: flex-start;
             border-bottom-left-radius: 4px;
         }
+
         .message.outbound {
-            background: #e3f2fd;
+            background: #e6dcff;
+            color: var(--navy);
+            border: 1px solid #d8c8ff;
             align-self: flex-end;
             margin-left: auto;
             border-bottom-right-radius: 4px;
         }
+
         .message .time {
-            font-size: 11px;
-            color: #999;
-            margin-top: 4px;
-        }
-        .message .direction {
             font-size: 10px;
-            color: #666;
+            color: var(--muted);
+            margin-top: 3px;
+        }
+
+        .message.outbound .time { color: var(--muted); }
+
+        .message .direction {
+            font-size: 9px;
+            color: var(--muted);
             text-transform: uppercase;
-            font-weight: 600;
+            font-weight: 700;
+            margin-bottom: 2px;
         }
-        .chat-messages {
+
+        .message.outbound .direction { color: var(--violet); }
+
+        .media-card {
+            display: grid;
+            gap: 8px;
+            min-width: 210px;
+        }
+
+        .media-label {
             display: flex;
-            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+            color: var(--navy);
         }
+
+        .media-link {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: max-content;
+            max-width: 100%;
+            min-height: 30px;
+            padding: 0 10px;
+            border-radius: 999px;
+            background: var(--surface-muted);
+            border: 1px solid var(--border);
+            color: var(--violet);
+            text-decoration: none;
+            font-size: 12px;
+            font-weight: 700;
+        }
+
+        .location-card {
+            display: grid;
+            gap: 6px;
+            min-width: 210px;
+        }
+
+        .coordinates {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
         .empty-state {
             display: flex;
             align-items: center;
             justify-content: center;
             height: 100%;
-            color: #999;
+            color: var(--muted);
             font-size: 14px;
+            padding: 20px;
+            text-align: center;
         }
+
+        .chat-messages > .empty-state {
+            display: none;
+        }
+
+        .modal-backdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 15, 31, 0.45);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            z-index: 20;
+        }
+
+        .modal-backdrop.open { display: flex; }
+
+        .modal {
+            width: min(440px, 100%);
+            background: var(--surface);
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            box-shadow: 0 24px 80px rgba(15, 15, 31, 0.22);
+        }
+
+        .modal-header {
+            padding: 18px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .modal-header h2 {
+            color: var(--navy);
+            font-size: 18px;
+            line-height: 1.2;
+        }
+
+        .modal-body {
+            padding: 18px 20px;
+            display: grid;
+            gap: 14px;
+        }
+
+        .field label {
+            display: block;
+            font-size: 12px;
+            color: var(--muted);
+            margin-bottom: 6px;
+            font-weight: 650;
+            text-transform: uppercase;
+            letter-spacing: 0;
+        }
+
+        .field input {
+            width: 100%;
+            padding: 10px 12px;
+            border-radius: 6px;
+            border: 1px solid var(--border);
+            color: var(--text);
+            font: inherit;
+            outline: none;
+        }
+
+        .modal-actions {
+            padding: 0 20px 18px;
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+        }
+
         @media (max-width: 768px) {
-            .layout { flex-direction: column; height: auto; }
-            .contacts-panel { width: 100%; max-height: 200px; }
+            .welcome-screen { padding: 18px; align-items: flex-start; }
+            .welcome-card { grid-template-columns: 1fr; padding: 28px; gap: 28px; }
+            .welcome-logo { width: 220px; height: 64px; }
+            .welcome-card h1 { font-size: 28px; }
+            .welcome-visual { min-height: 240px; }
+            .topbar { align-items: flex-start; flex-direction: column; }
+            .brand-logo { width: 220px; height: 64px; }
+            .product-title { border-left: 0; padding-left: 0; }
+            .main { padding: 16px; }
+            .toolbar-left { width: 100%; flex-wrap: wrap; }
+            .search-input { width: 100%; }
+            body { overflow: auto; }
+            .app-shell { height: auto; min-height: 100vh; }
+            .layout { flex-direction: column; height: auto; overflow: visible; }
+            .contacts-panel { width: 100%; max-height: 220px; }
+            .chat-panel { min-height: 520px; }
+            .message { max-width: 90%; }
         }
     </style>
 </head>
 <body>
-    <div class="header">
-        <h1>💬 Conversaciones — NEXT GEN</h1>
-        <p>Registro de interacciones del chatbot WhatsApp</p>
-    </div>
-
-    <div class="stats">
-        <div class="stat-card">
-            <div class="number" id="total-contacts">-</div>
-            <div class="label">Contactos</div>
-        </div>
-        <div class="stat-card">
-            <div class="number" id="total-messages">-</div>
-            <div class="label">Mensajes totales</div>
-        </div>
-        <div class="stat-card">
-            <div class="number" id="today-messages">-</div>
-            <div class="label">Mensajes hoy</div>
-        </div>
-    </div>
-
-    <div class="toolbar">
-        <button class="refresh-btn" onclick="loadConversations()">🔄 Actualizar</button>
-        <span class="last-updated" id="last-updated"></span>
-    </div>
-
-    <div class="layout">
-        <div class="contacts-panel" id="contacts-list">
-            <div class="empty-state">Cargando...</div>
-        </div>
-        <div class="chat-panel">
-            <div class="chat-header" id="chat-header">Selecciona un contacto</div>
-            <div class="chat-messages" id="chat-messages">
-                <div class="empty-state">Selecciona un contacto para ver la conversación</div>
+    <section class="welcome-screen" id="welcome-screen">
+        <div class="welcome-card">
+            <div>
+                <img class="welcome-logo" src="assets/brand/logo-banking-cropped.png" alt="Example Banking">
+                <h1>ChattLogger</h1>
+                <div class="welcome-steps">
+                    <div class="welcome-step"><span class="step-number">1</span>Entra al panel de atención.</div>
+                    <div class="welcome-step"><span class="step-number">2</span>Selecciona una conversación.</div>
+                    <div class="welcome-step"><span class="step-number">3</span>Responde manualmente por WhatsApp.</div>
+                </div>
+                <label class="remember-row">
+                    <input type="checkbox" id="remember-session" checked>
+                    Mantener sesión iniciada en este navegador
+                </label>
+                <button class="primary-btn" onclick="enterPanel()">Iniciar</button>
             </div>
-            <div class="chat-input" id="chat-input" style="display:none;">
-                <input type="text" id="message-input" placeholder="Escribe un mensaje..." onkeypress="if(event.key==='Enter')sendMessage()">
-                <button onclick="sendMessage()" id="send-btn">Enviar</button>
+            <div class="welcome-visual" aria-hidden="true">
+                <div class="qr-card">
+                    <div class="qr-code" id="qr-code">
+                        <span class="qr-center">
+                            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
+                                <path d="M36.5 32.8c-1.4 3.3-5.3 5.6-9.8 5.6-8.1 0-14.7-6.2-14.7-13.9S18.6 10.6 26.7 10.6s14.7 6.2 14.7 13.9c0 2.8-.9 5.4-2.4 7.6l1.1 5.3-5.2-1.3" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M21.1 18.8c.5-1.1 1.1-1.2 1.7-1.2h1.2c.4 0 .9.1 1.2.9.4.9 1.3 3.1 1.4 3.3.1.3.2.7 0 1.1-.3.5-.5.8-.9 1.2-.4.4-.8.8-.3 1.6.5.8 2 3.1 4.2 4.3 1.7.9 2.1.8 2.8.1.5-.5 1-1.4 1.6-1.3.6.2 3.4 1.6 4 1.9.5.3.9.4 1 .7.2.8-.4 2.5-1.4 3.3" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </span>
+                    </div>
+                </div>
             </div>
         </div>
+    </section>
+
+    <div class="app-shell" id="app-shell" style="display:none;">
+        <header class="topbar">
+            <div class="brand-lockup">
+                <img class="brand-logo" src="assets/brand/logo-banking-cropped.png" alt="Example Banking">
+                <div class="product-title">
+                    <h1>ChattLogger</h1>
+                </div>
+            </div>
+            <div class="topbar-actions">
+                <button class="secondary-btn logout-btn" onclick="logoutPanel()">Salir</button>
+            </div>
+        </header>
+
+        <main class="main">
+            <div class="toolbar">
+                <div class="toolbar-left">
+                    <input class="search-input" id="search-input" type="search" placeholder="Buscar por nombre, teléfono o mensaje">
+                    <button class="icon-btn" type="button" onclick="loadConversations()" title="Actualizar conversaciones" aria-label="Actualizar conversaciones">↻</button>
+                </div>
+            </div>
+
+            <div class="layout">
+                <div class="contacts-panel" id="contacts-list">
+                    <div class="empty-state">Cargando conversaciones...</div>
+                </div>
+                <div class="chat-panel">
+                    <div class="chat-header" id="chat-header-bar" style="display:none;">
+                        <div>
+                            <span class="chat-title" id="chat-header"></span>
+                            <span class="chat-subtitle" id="chat-subtitle"></span>
+                        </div>
+                        <button class="secondary-btn" id="edit-contact-btn" onclick="openContactModal()" style="display:none;">Guardar contacto</button>
+                    </div>
+                    <div class="chat-messages" id="chat-messages">
+                        <div class="empty-state"></div>
+                    </div>
+                    <div class="chat-input" id="chat-input" style="display:none;">
+                        <textarea id="message-input" placeholder="Escribe una respuesta manual..."></textarea>
+                        <button class="primary-btn" onclick="sendMessage()" id="send-btn">Enviar</button>
+                    </div>
+                    <div class="send-status" id="send-status"></div>
+                </div>
+            </div>
+        </main>
     </div>
 
+    <div class="modal-backdrop" id="contact-modal" aria-hidden="true">
+        <form class="modal" id="contact-form">
+            <div class="modal-header">
+                <h2>Guardar contacto</h2>
+            </div>
+            <div class="modal-body">
+                <div class="field">
+                    <label for="contact-phone">Teléfono</label>
+                    <input id="contact-phone" name="phone" inputmode="tel" autocomplete="tel" placeholder="584120000000" required>
+                </div>
+                <div class="field">
+                    <label for="contact-name">Nombre y apellido</label>
+                    <input id="contact-name" name="name" autocomplete="name" placeholder="Nombre del contacto" required>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary-btn" type="button" onclick="closeContactModal()">Cancelar</button>
+                <button class="primary-btn" type="submit">Guardar</button>
+            </div>
+        </form>
+    </div>
+
+    <script src="config.js"></script>
     <script>
-        const API_URL = 'https://lb43yesgh3.execute-api.us-east-1.amazonaws.com/prod/conversations';
-        const SEND_API_URL = 'https://lb43yesgh3.execute-api.us-east-1.amazonaws.com/prod/send-message';
-        const ATTENDEES_URL_1 = 'attendees.json';
-        const ATTENDEES_URL_2 = 'attendees2.json';
+        const API_BASE_URL = (window.CHATTLOGGER_API_URL || '').replace(/\/$/, '');
+        const API_URL = API_BASE_URL ? `${API_BASE_URL}/conversations` : '';
+        const SEND_API_URL = API_BASE_URL ? `${API_BASE_URL}/send-message` : '';
+        const CONTACTS_URL = 'contacts.json';
+        const CONTACTS_STORAGE_KEY = 'chattlogger.contacts.v1';
+        const SESSION_STORAGE_KEY = 'chattlogger.session.v1';
 
         let allMessages = [];
         let contacts = {};
-        let attendeesMap = {}; // phone -> attendee info
+        let contactsMap = {};
+        let savedContacts = [];
         let selectedPhone = null;
+        let searchTerm = '';
+        let previousMessageCount = 0;
+        let notificationsEnabled = false;
+        let panelStarted = false;
+        let refreshTimer = null;
 
-        async function loadAttendees() {
-            try {
-                const [r1, r2] = await Promise.all([
-                    fetch(ATTENDEES_URL_1).then(r => r.json()).catch(() => []),
-                    fetch(ATTENDEES_URL_2).then(r => r.json()).catch(() => []),
-                ]);
-                const all = [...r1, ...r2];
-                all.forEach(a => {
-                    // Normalize phone: remove leading 58 and add 58 prefix for matching
-                    const phone = a.phone || '';
-                    attendeesMap[phone] = a;
-                    // Also map without country code variations
-                    if (phone.startsWith('58')) {
-                        attendeesMap[phone.substring(2)] = a;
+        function renderQrVisual() {
+            const qr = document.getElementById('qr-code');
+            if (!qr || qr.dataset.rendered) return;
+            qr.dataset.rendered = 'true';
+
+            const size = 29;
+            const centerMin = 11;
+            const centerMax = 17;
+            const isFinder = (x, y, ox, oy) => {
+                const dx = x - ox;
+                const dy = y - oy;
+                if (dx < 0 || dy < 0 || dx > 6 || dy > 6) return null;
+                if (dx === 0 || dy === 0 || dx === 6 || dy === 6) return 'finder';
+                if (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4) return 'finder';
+                return 'finder-light';
+            };
+
+            for (let y = 0; y < size; y++) {
+                for (let x = 0; x < size; x++) {
+                    const module = document.createElement('span');
+                    module.className = 'qr-module';
+
+                    const finder =
+                        isFinder(x, y, 0, 0) ||
+                        isFinder(x, y, size - 7, 0) ||
+                        isFinder(x, y, 0, size - 7);
+
+                    if (finder) {
+                        module.classList.add(finder);
+                    } else if (!(x >= centerMin && x <= centerMax && y >= centerMin && y <= centerMax)) {
+                        const value = (x * 17 + y * 31 + x * y * 7 + (x ^ y) * 11) % 9;
+                        if (value === 0 || value === 2 || value === 5 || (x + y) % 11 === 0) {
+                            module.classList.add('on');
+                        }
                     }
-                });
-            } catch (e) {
-                console.warn('Could not load attendees:', e);
+
+                    qr.insertBefore(module, qr.firstChild);
+                }
             }
         }
 
-        function getAttendeeName(phone) {
-            const a = attendeesMap[phone] || attendeesMap[phone.replace(/^\+/, '')];
-            if (a) return `${a.first_name} ${a.last_name}`;
-            return null;
+        function enterPanel() {
+            if (document.getElementById('remember-session').checked) {
+                localStorage.setItem(SESSION_STORAGE_KEY, 'active');
+            } else {
+                localStorage.removeItem(SESSION_STORAGE_KEY);
+            }
+
+            document.getElementById('welcome-screen').style.display = 'none';
+            document.getElementById('app-shell').style.display = 'flex';
+
+            if (!panelStarted) {
+                panelStarted = true;
+                loadContactsDirectory().then(() => loadConversations());
+                refreshTimer = setInterval(loadConversations, 30000);
+            }
         }
 
-        function getAttendeeInfo(phone) {
-            return attendeesMap[phone] || attendeesMap[phone.replace(/^\+/, '')] || null;
+        function logoutPanel() {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+            if (refreshTimer) clearInterval(refreshTimer);
+            refreshTimer = null;
+            panelStarted = false;
+            selectedPhone = null;
+            searchTerm = '';
+            document.getElementById('search-input').value = '';
+            document.getElementById('chat-header-bar').style.display = 'none';
+            document.getElementById('chat-input').style.display = 'none';
+            document.getElementById('edit-contact-btn').style.display = 'none';
+            document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
+            document.getElementById('app-shell').style.display = 'none';
+            document.getElementById('welcome-screen').style.display = 'flex';
+            document.getElementById('remember-session').checked = false;
         }
 
-        let previousMessageCount = 0;
-        let notificationsEnabled = false;
+        async function loadContactsDirectory() {
+            try {
+                const response = await fetch(CONTACTS_URL, { cache: 'no-store' });
+                if (response.ok) {
+                    const directory = await response.json();
+                    if (Array.isArray(directory)) directory.forEach(indexContact);
+                }
+            } catch (error) {
+                console.warn('No contacts directory found:', error);
+            }
 
-        // Request notification permission on first interaction
+            loadSavedContacts();
+        }
+
+        function normalizePhone(phone) {
+            return String(phone || '').replace(/\D/g, '');
+        }
+
+        function indexContact(contact) {
+            const phone = normalizePhone(contact.phone || contact.telefono || '');
+            if (!phone) return;
+            const normalizedContact = {
+                ...contact,
+                phone,
+                name: contact.name || contact.nombre || [contact.first_name, contact.last_name].filter(Boolean).join(' '),
+            };
+            contactsMap[phone] = normalizedContact;
+            if (phone.startsWith('58')) contactsMap[phone.substring(2)] = normalizedContact;
+        }
+
+        function loadSavedContacts() {
+            try {
+                savedContacts = JSON.parse(localStorage.getItem(CONTACTS_STORAGE_KEY) || '[]');
+                if (!Array.isArray(savedContacts)) savedContacts = [];
+            } catch (error) {
+                savedContacts = [];
+            }
+            savedContacts.forEach(indexContact);
+        }
+
+        function persistSavedContacts() {
+            localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(savedContacts));
+        }
+
+        function getContactInfo(phone) {
+            const normalized = normalizePhone(phone);
+            return contactsMap[normalized] || contactsMap[normalized.replace(/^58/, '')] || null;
+        }
+
+        function getContactName(phone) {
+            const contact = getContactInfo(phone);
+            if (!contact) return null;
+            return contact.name || contact.nombre || [contact.first_name, contact.last_name].filter(Boolean).join(' ') || null;
+        }
+
+        function escapeHtml(value) {
+            return String(value || '').replace(/[&<>"']/g, char => ({
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;',
+            }[char]));
+        }
+
+        function normalize(value) {
+            return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function openContactModal(phone = selectedPhone) {
+            const modal = document.getElementById('contact-modal');
+            const phoneInput = document.getElementById('contact-phone');
+            const nameInput = document.getElementById('contact-name');
+            const normalizedPhone = normalizePhone(phone);
+            const contact = normalizedPhone ? getContactInfo(normalizedPhone) : null;
+
+            phoneInput.value = normalizedPhone || '';
+            nameInput.value = contact ? (getContactName(normalizedPhone) || '') : '';
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            setTimeout(() => (phoneInput.value ? nameInput.focus() : phoneInput.focus()), 0);
+        }
+
+        function closeContactModal() {
+            const modal = document.getElementById('contact-modal');
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.getElementById('contact-form').reset();
+        }
+
+        function saveContactFromForm(event) {
+            event.preventDefault();
+            const phone = normalizePhone(document.getElementById('contact-phone').value);
+            const name = document.getElementById('contact-name').value.trim();
+            if (!phone || !name) return;
+
+            const contact = { phone, name };
+            const existingIndex = savedContacts.findIndex(item => normalizePhone(item.phone || item.telefono) === phone);
+            if (existingIndex >= 0) savedContacts[existingIndex] = contact;
+            else savedContacts.push(contact);
+
+            persistSavedContacts();
+            indexContact(contact);
+            renderContacts();
+            if (selectedPhone && normalizePhone(selectedPhone) === phone) renderSelectedContact();
+            closeContactModal();
+        }
+
         document.addEventListener('click', () => {
             if (Notification.permission === 'default') {
-                Notification.requestPermission().then(p => {
-                    notificationsEnabled = (p === 'granted');
+                Notification.requestPermission().then(permission => {
+                    notificationsEnabled = permission === 'granted';
                 });
             }
         }, { once: true });
@@ -269,7 +975,6 @@
         if (Notification.permission === 'granted') notificationsEnabled = true;
 
         function playNotificationSound() {
-            // Simple beep using Web Audio API
             try {
                 const ctx = new (window.AudioContext || window.webkitAudioContext)();
                 const osc = ctx.createOscillator();
@@ -277,48 +982,46 @@
                 osc.connect(gain);
                 gain.connect(ctx.destination);
                 osc.frequency.value = 800;
-                gain.gain.value = 0.3;
+                gain.gain.value = 0.25;
                 osc.start();
-                osc.stop(ctx.currentTime + 0.15);
-            } catch(e) {}
+                osc.stop(ctx.currentTime + 0.12);
+            } catch (error) {}
         }
 
         function showBrowserNotification(phone, message) {
             if (!notificationsEnabled) return;
-            const name = getAttendeeName(phone) || phone;
-            new Notification(`💬 Nuevo mensaje - ${name}`, {
+            const name = getContactName(phone) || phone;
+            new Notification(`Nuevo mensaje - ${name}`, {
                 body: message.substring(0, 100),
-                icon: '💬',
             });
         }
 
         async function loadConversations() {
+            if (!API_URL) {
+                document.getElementById('contacts-list').innerHTML =
+                    '<div class="empty-state">Falta configurar VITE_API_URL en Amplify.</div>';
+                return;
+            }
+
             try {
                 const response = await fetch(API_URL);
                 const newMessages = await response.json();
-                
-                // Check for new inbound messages
-                const newInbound = newMessages.filter(m => m.direction === 'inbound');
+                allMessages = Array.isArray(newMessages) ? newMessages : [];
+
+                const newInbound = allMessages.filter(message => message.direction === 'inbound');
                 if (previousMessageCount > 0 && newInbound.length > previousMessageCount) {
-                    const diff = newInbound.length - previousMessageCount;
-                    // Get the newest messages
-                    const newest = newInbound.slice(0, diff);
-                    newest.forEach(msg => {
+                    const newest = newInbound.slice(0, newInbound.length - previousMessageCount);
+                    newest.forEach(message => {
                         playNotificationSound();
-                        showBrowserNotification(msg.phone_number, msg.message || '');
+                        showBrowserNotification(message.phone_number, message.message || '');
                     });
-                    // Update page title with count
-                    document.title = `(${diff}) 💬 Conversaciones — NEXT GEN`;
-                    setTimeout(() => { document.title = '💬 Conversaciones — NEXT GEN'; }, 5000);
                 }
                 previousMessageCount = newInbound.length;
-                
-                allMessages = newMessages;
+
                 processMessages();
                 renderContacts();
-                updateStats();
-                document.getElementById('last-updated').textContent =
-                    'Actualizado: ' + new Date().toLocaleTimeString('es');
+                if (selectedPhone && contacts[selectedPhone]) renderSelectedContact();
+                else selectLatestContact();
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('contacts-list').innerHTML =
@@ -328,150 +1031,222 @@
 
         function processMessages() {
             contacts = {};
-            allMessages.forEach(msg => {
-                const phone = msg.phone_number;
+            allMessages.forEach(message => {
+                const phone = message.phone_number;
+                if (!phone) return;
                 if (!contacts[phone]) {
                     contacts[phone] = {
-                        phone: phone,
+                        phone,
                         messages: [],
                         lastMessage: '',
                         lastTime: '',
                         messageCount: 0,
                     };
                 }
-                contacts[phone].messages.push(msg);
+                contacts[phone].messages.push(message);
                 contacts[phone].messageCount++;
             });
 
-            // Sort messages within each contact by timestamp
-            Object.values(contacts).forEach(c => {
-                c.messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-                const last = c.messages[c.messages.length - 1];
-                c.lastMessage = last.message || '';
-                c.lastTime = last.timestamp || '';
+            Object.values(contacts).forEach(contact => {
+                contact.messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
+                const last = contact.messages[contact.messages.length - 1];
+                contact.lastMessage = last.message || '';
+                contact.lastTime = last.timestamp || '';
             });
         }
 
         function renderContacts() {
             const list = document.getElementById('contacts-list');
-            const sorted = Object.values(contacts).sort((a, b) =>
-                b.lastTime.localeCompare(a.lastTime)
-            );
+            const query = normalize(searchTerm);
+            const sorted = Object.values(contacts)
+                .filter(contact => {
+                    const haystack = normalize([
+                        contact.phone,
+                        getContactName(contact.phone),
+                        contact.lastMessage,
+                    ].join(' '));
+                    return !query || haystack.includes(query);
+                })
+                .sort((a, b) => b.lastTime.localeCompare(a.lastTime));
 
             if (sorted.length === 0) {
-                list.innerHTML = '<div class="empty-state">No hay conversaciones aún</div>';
+                list.innerHTML = `<div class="empty-state">${query ? 'No hay resultados para la búsqueda' : 'No hay conversaciones aún'}</div>`;
                 return;
             }
 
-            list.innerHTML = sorted.map(c => {
-                const timeStr = c.lastTime ? new Date(c.lastTime).toLocaleString('es', {
+            list.innerHTML = sorted.map(contact => {
+                const timeStr = contact.lastTime ? new Date(contact.lastTime).toLocaleString('es', {
                     month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
                 }) : '';
-                const name = getAttendeeName(c.phone);
-                const displayName = name || c.phone;
-                const info = getAttendeeInfo(c.phone);
-                const company = info ? info.company : '';
-                return `<div class="contact-item" onclick="selectContact('${c.phone}')">
-                    <div class="phone">${name ? '👤' : '📱'} ${displayName}</div>
-                    <div class="meta">${company ? company + ' · ' : ''}${c.messageCount} msgs · ${timeStr}</div>
-                    <div class="last-msg">${c.lastMessage.substring(0, 50)}</div>
-                </div>`;
+                const contactName = getContactName(contact.phone);
+                const activeClass = contact.phone === selectedPhone ? ' active' : '';
+                return `<button class="contact-item${activeClass}" data-phone="${escapeHtml(contact.phone)}">
+                    <div class="phone">${contactName ? '👤 ' + escapeHtml(contactName) : '📱 ' + escapeHtml(contact.phone)}</div>
+                    <div class="meta">${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}</div>
+                    <div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>
+                </button>`;
             }).join('');
+
+            list.querySelectorAll('.contact-item').forEach(item => {
+                item.addEventListener('click', () => selectContact(item.dataset.phone));
+            });
         }
 
         function selectContact(phone) {
-            // Highlight active contact
-            document.querySelectorAll('.contact-item').forEach(el => el.classList.remove('active'));
-            event.currentTarget?.classList.add('active');
-
-            const contact = contacts[phone];
-            if (!contact) return;
-
             selectedPhone = phone;
-            document.getElementById('chat-input').style.display = 'flex';
-
-            const info = getAttendeeInfo(phone);
-            const name = getAttendeeName(phone);
-            let headerText = `📱 ${phone} (${contact.messageCount} mensajes)`;
-            if (info) {
-                headerText = `👤 ${name} — ${info.company} — ${info.role} — ${phone}`;
-            }
-            document.getElementById('chat-header').textContent = headerText;
-
-            const messagesDiv = document.getElementById('chat-messages');
-            messagesDiv.innerHTML = contact.messages.map(msg => {
-                const time = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('es', {
-                    hour: '2-digit', minute: '2-digit'
-                }) : '';
-                const date = msg.timestamp ? new Date(msg.timestamp).toLocaleDateString('es', {
-                    month: 'short', day: 'numeric'
-                }) : '';
-                const dir = msg.direction === 'inbound' ? '👤 Usuario' : '🤖 Bot';
-                return `<div class="message ${msg.direction || 'inbound'}">
-                    <div class="direction">${dir}</div>
-                    <div>${msg.message || ''}</div>
-                    <div class="time">${date} ${time}</div>
-                </div>`;
-            }).join('');
-
-            // Scroll to bottom
-            messagesDiv.scrollTop = messagesDiv.scrollHeight;
+            renderContacts();
+            renderSelectedContact();
         }
 
-        function updateStats() {
-            const now = new Date();
-            const todayStr = now.toISOString().split('T')[0];
+        function selectLatestContact() {
+            const latest = Object.values(contacts)
+                .sort((a, b) => b.lastTime.localeCompare(a.lastTime))[0];
+            if (!latest) return;
+            selectedPhone = latest.phone;
+            renderContacts();
+            renderSelectedContact();
+        }
 
-            document.getElementById('total-contacts').textContent = Object.keys(contacts).length;
-            document.getElementById('total-messages').textContent = allMessages.length;
+        function renderMessageContent(message) {
+            const text = String(message.message || '').trim();
+            const imageMatch = text.match(/^\[Imagen\]:\s*(https?:\/\/\S+)/i);
+            const locationMatch = text.match(/^\[Ubicacion\]:\s*([-.\d]+),\s*([-.\d]+)(.*)$/i);
 
-            const todayMsgs = allMessages.filter(m => m.timestamp && m.timestamp.startsWith(todayStr));
-            document.getElementById('today-messages').textContent = todayMsgs.length;
+            if (imageMatch) {
+                const url = imageMatch[1];
+                return `<div class="media-card">
+                    <div class="media-label">🖼️ Imagen recibida</div>
+                    <a class="media-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Abrir imagen</a>
+                </div>`;
+            }
+
+            if (locationMatch) {
+                const lat = locationMatch[1];
+                const lng = locationMatch[2];
+                const label = locationMatch[3].trim();
+                const mapsUrl = `https://www.google.com/maps?q=${encodeURIComponent(`${lat},${lng}`)}`;
+                return `<div class="location-card">
+                    <div class="media-label">📍 Ubicación recibida</div>
+                    <div class="coordinates">${escapeHtml(lat)}, ${escapeHtml(lng)}${label ? ' · ' + escapeHtml(label) : ''}</div>
+                    <a class="media-link" href="${mapsUrl}" target="_blank" rel="noopener noreferrer">Abrir en mapa</a>
+                </div>`;
+            }
+
+            return escapeHtml(text);
+        }
+
+        function renderSelectedContact() {
+            const contact = contacts[selectedPhone];
+            if (!contact) return;
+
+            document.getElementById('chat-header-bar').style.display = 'flex';
+            document.getElementById('chat-input').style.display = 'flex';
+            document.getElementById('edit-contact-btn').style.display = 'inline-flex';
+
+            const contactName = getContactName(selectedPhone);
+            document.getElementById('chat-header').textContent = contactName
+                ? contactName
+                : selectedPhone;
+            document.getElementById('chat-subtitle').textContent = contactName
+                ? `${selectedPhone} · ${contact.messageCount} mensajes`
+                : `${contact.messageCount} mensajes`;
+
+            const messagesDiv = document.getElementById('chat-messages');
+            messagesDiv.innerHTML = contact.messages.map(message => {
+                const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString('es', {
+                    hour: '2-digit', minute: '2-digit'
+                }) : '';
+                const date = message.timestamp ? new Date(message.timestamp).toLocaleDateString('es', {
+                    month: 'short', day: 'numeric'
+                }) : '';
+                const direction = message.direction === 'inbound' ? '👤 Cliente' : '✍️ Agente';
+                return `<div class="message ${message.direction || 'inbound'}"><div class="direction">${direction}</div><div>${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
+            }).join('');
+
+            messagesDiv.scrollTop = messagesDiv.scrollHeight;
         }
 
         async function sendMessage() {
             const input = document.getElementById('message-input');
             const btn = document.getElementById('send-btn');
+            const status = document.getElementById('send-status');
             const message = input.value.trim();
-            
+
             if (!message || !selectedPhone) return;
-            
+            if (!SEND_API_URL) {
+                status.className = 'send-status error';
+                status.textContent = 'Falta configurar VITE_API_URL en Amplify.';
+                return;
+            }
+
             btn.disabled = true;
             btn.textContent = '...';
-            
+            status.className = 'send-status';
+            status.textContent = 'Enviando mensaje...';
+
             try {
                 const response = await fetch(SEND_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: selectedPhone, message: message }),
+                    body: JSON.stringify({ phone: selectedPhone, message }),
                 });
-                
-                if (response.ok) {
-                    input.value = '';
-                    // Add message to UI immediately
-                    const messagesDiv = document.getElementById('chat-messages');
-                    const now = new Date();
-                    messagesDiv.innerHTML += `<div class="message outbound">
-                        <div class="direction">✍️ Manual</div>
-                        <div>${message}</div>
-                        <div class="time">${now.toLocaleDateString('es', {month:'short',day:'numeric'})} ${now.toLocaleTimeString('es', {hour:'2-digit',minute:'2-digit'})}</div>
-                    </div>`;
-                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
-                } else {
-                    const err = await response.json();
-                    alert('Error: ' + (err.error || 'No se pudo enviar'));
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || 'No se pudo enviar');
                 }
-            } catch (e) {
-                alert('Error de conexión: ' + e.message);
+
+                input.value = '';
+                allMessages.push({
+                    phone_number: selectedPhone,
+                    timestamp: new Date().toISOString(),
+                    direction: 'outbound',
+                    message,
+                    msg_type: 'manual',
+                });
+                processMessages();
+                renderContacts();
+                renderSelectedContact();
+                status.className = 'send-status success';
+                status.textContent = 'Mensaje enviado.';
+                setTimeout(() => {
+                    if (status.textContent === 'Mensaje enviado.') status.textContent = '';
+                }, 2500);
+            } catch (error) {
+                status.className = 'send-status error';
+                status.textContent = 'Error: ' + error.message;
             } finally {
                 btn.disabled = false;
                 btn.textContent = 'Enviar';
+                input.focus();
             }
         }
 
-        // Load on page load and auto-refresh every 30 seconds
-        loadAttendees().then(() => loadConversations());
-        setInterval(loadConversations, 30000);
+        document.getElementById('message-input').addEventListener('keydown', event => {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        });
+
+        document.getElementById('search-input').addEventListener('input', event => {
+            searchTerm = event.target.value;
+            renderContacts();
+        });
+
+        document.getElementById('contact-form').addEventListener('submit', saveContactFromForm);
+        document.getElementById('contact-modal').addEventListener('click', event => {
+            if (event.target.id === 'contact-modal') closeContactModal();
+        });
+        document.addEventListener('keydown', event => {
+            if (event.key === 'Escape') closeContactModal();
+        });
+
+        renderQrVisual();
+
+        if (localStorage.getItem(SESSION_STORAGE_KEY) === 'active') {
+            enterPanel();
+        }
     </script>
 </body>
 </html>

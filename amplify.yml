@@ -1,0 +1,12 @@
+version: 1
+frontend:
+  phases:
+    build:
+      commands:
+        - printf "window.CHATTLOGGER_API_URL = '%s';\n" "$VITE_API_URL" > waba-bedrock-webhook/panel/config.js
+  artifacts:
+    baseDirectory: waba-bedrock-webhook/panel
+    files:
+      - '**/*'
+  cache:
+    paths: []
