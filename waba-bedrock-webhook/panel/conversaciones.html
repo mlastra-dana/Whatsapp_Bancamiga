@@ -1583,7 +1583,11 @@
                 const date = message.timestamp ? new Date(message.timestamp).toLocaleDateString('es', {
                     month: 'short', day: 'numeric'
                 }) : '';
-                const direction = message.direction === 'inbound' ? '👤 Cliente' : '✍️ Agente';
+                const direction = message.direction === 'inbound'
+                    ? '👤 Cliente'
+                    : message.msg_type === 'absence'
+                        ? '🤖 Bot'
+                        : '✍️ Agente';
                 return `<div class="message ${message.direction || 'inbound'}"><div class="direction">${direction}</div><div>${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
