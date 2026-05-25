@@ -21,6 +21,11 @@ VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
 STATE_TABLE_NAME = os.environ.get("STATE_TABLE_NAME", "chat-state")
 CONVERSATIONS_TABLE_NAME = os.environ.get("CONVERSATIONS_TABLE_NAME", "chat-logs")
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
+ABSENCE_BOT_STATE_KEY = "__absence_bot__"
+DEFAULT_ABSENCE_MESSAGE = (
+    "Gracias por escribirnos. En este momento no hay un asesor disponible. "
+    "Te responderemos apenas retomemos la atencion."
+)
 
 dynamodb = boto3.resource("dynamodb")
 state_table = dynamodb.Table(STATE_TABLE_NAME)
@@ -97,6 +102,48 @@ def save_user(telefono, estado, historial):
             "historial": historial[-6:] if isinstance(historial, list) else historial,
         }
     )
+
+
+def get_absence_bot_config():
+    try:
+        res = state_table.get_item(Key={"telefono": ABSENCE_BOT_STATE_KEY})
+        item = res.get("Item") or {}
+    except Exception:
+        logger.exception("Could not read absence bot config")
+        item = {}
+
+    return {
+        "enabled": bool(item.get("enabled", False)),
+        "message": item.get("message") or DEFAULT_ABSENCE_MESSAGE,
+        "updated_at": item.get("updated_at", ""),
+    }
+
+
+def save_absence_bot_config(enabled, message):
+    clean_message = str(message or "").strip() or DEFAULT_ABSENCE_MESSAGE
+    config = {
+        "telefono": ABSENCE_BOT_STATE_KEY,
+        "enabled": bool(enabled),
+        "message": clean_message[:1000],
+        "updated_at": now_iso(),
+    }
+    state_table.put_item(Item=config)
+    return {
+        "enabled": config["enabled"],
+        "message": config["message"],
+        "updated_at": config["updated_at"],
+    }
+
+
+def get_absence_bot(event):
+    return response(200, get_absence_bot_config())
+
+
+def update_absence_bot(event):
+    body = parse_body(event)
+    enabled = bool(body.get("enabled", False))
+    message = body.get("message", DEFAULT_ABSENCE_MESSAGE)
+    return response(200, save_absence_bot_config(enabled, message))
 
 
 def guardar_mensaje(telefono, mensaje, direccion, msg_type="text"):
@@ -298,6 +345,15 @@ def handle_whatsapp_webhook(event):
         logger.exception("Could not parse WhatsApp webhook")
         return response(200, {"success": True})
 
+    absence_config = get_absence_bot_config()
+    if absence_config["enabled"]:
+        try:
+            enviar_whatsapp(telefono, absence_config["message"])
+            guardar_mensaje(telefono, absence_config["message"], "salida", "absence")
+        except Exception:
+            logger.exception("Absence bot reply failed")
+        return response(200, {"success": True, "mode": "absence_bot"})
+
     mensaje_lower = normalize_text(mensaje)
 
     # Bancamiga is manual-only: log incoming messages and do not auto-reply.
@@ -441,6 +497,10 @@ def lambda_handler(event, context):
             return list_conversations(event)
         if method == "POST" and path == "/send-message":
             return send_message_from_panel(event)
+        if method == "GET" and path == "/absence-bot":
+            return get_absence_bot(event)
+        if method == "POST" and path == "/absence-bot":
+            return update_absence_bot(event)
         if method == "POST" and path in {"/", "/webhook"}:
             return handle_whatsapp_webhook(event)
         return response(404, {"error": "Not found"})
