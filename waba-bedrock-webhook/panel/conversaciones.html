@@ -443,6 +443,33 @@
             border-top: 1px solid var(--border);
         }
 
+        .template-strip {
+            display: none;
+            gap: 8px;
+            padding: 9px 14px 0;
+            border-top: 1px solid var(--border);
+            overflow-x: auto;
+        }
+
+        .template-chip {
+            min-height: 30px;
+            padding: 0 10px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            background: var(--surface);
+            color: var(--violet);
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
+            white-space: nowrap;
+            cursor: pointer;
+        }
+
+        .template-chip:hover {
+            background: var(--surface-muted);
+            border-color: var(--lilac);
+        }
+
         .chat-input textarea {
             flex: 1;
             min-height: 38px;
@@ -596,6 +623,10 @@
             box-shadow: 0 24px 80px rgba(15, 15, 31, 0.22);
         }
 
+        .modal.large {
+            width: min(720px, 100%);
+        }
+
         .modal-header {
             padding: 18px 20px;
             border-bottom: 1px solid var(--border);
@@ -623,7 +654,8 @@
             letter-spacing: 0;
         }
 
-        .field input {
+        .field input,
+        .field textarea {
             width: 100%;
             padding: 10px 12px;
             border-radius: 6px;
@@ -631,6 +663,53 @@
             color: var(--text);
             font: inherit;
             outline: none;
+        }
+
+        .field textarea {
+            min-height: 86px;
+            resize: vertical;
+        }
+
+        .template-list {
+            display: grid;
+            gap: 8px;
+        }
+
+        .template-row {
+            display: grid;
+            grid-template-columns: 1fr auto;
+            gap: 10px;
+            align-items: center;
+            padding: 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface-muted);
+        }
+
+        .template-row strong {
+            display: block;
+            color: var(--navy);
+            font-size: 13px;
+            margin-bottom: 3px;
+        }
+
+        .template-row p {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .danger-btn {
+            min-height: 30px;
+            padding: 0 10px;
+            border: 1px solid rgba(180, 35, 24, 0.22);
+            border-radius: 6px;
+            background: #fff7f6;
+            color: var(--danger);
+            cursor: pointer;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 700;
         }
 
         .modal-actions {
@@ -702,6 +781,7 @@
                 </div>
             </div>
             <div class="topbar-actions">
+                <button class="secondary-btn logout-btn" onclick="openTemplatesModal()">Plantillas</button>
                 <button class="secondary-btn logout-btn" onclick="logoutPanel()">Salir</button>
             </div>
         </header>
@@ -729,6 +809,7 @@
                     <div class="chat-messages" id="chat-messages">
                         <div class="empty-state"></div>
                     </div>
+                    <div class="template-strip" id="template-strip"></div>
                     <div class="chat-input" id="chat-input" style="display:none;">
                         <textarea id="message-input" placeholder="Escribe una respuesta manual..."></textarea>
                         <button class="primary-btn" onclick="sendMessage()" id="send-btn">Enviar</button>
@@ -761,6 +842,29 @@
         </form>
     </div>
 
+    <div class="modal-backdrop" id="templates-modal" aria-hidden="true">
+        <form class="modal large" id="template-form">
+            <div class="modal-header">
+                <h2>Plantillas de respuesta</h2>
+            </div>
+            <div class="modal-body">
+                <div class="template-list" id="template-list"></div>
+                <div class="field">
+                    <label for="template-title">Nombre de plantilla</label>
+                    <input id="template-title" name="title" placeholder="Ej. Horario de atención" required>
+                </div>
+                <div class="field">
+                    <label for="template-body">Respuesta</label>
+                    <textarea id="template-body" name="body" placeholder="Escribe la respuesta rápida..." required></textarea>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary-btn" type="button" onclick="closeTemplatesModal()">Cerrar</button>
+                <button class="primary-btn" type="submit">Agregar plantilla</button>
+            </div>
+        </form>
+    </div>
+
     <script src="config.js"></script>
     <script>
         const API_BASE_URL = (window.CHATTLOGGER_API_URL || '').replace(/\/$/, '');
@@ -769,6 +873,25 @@
         const CONTACTS_URL = 'contacts.json';
         const CONTACTS_STORAGE_KEY = 'chattlogger.contacts.v1';
         const SESSION_STORAGE_KEY = 'chattlogger.session.v1';
+        const TEMPLATES_STORAGE_KEY = 'chattlogger.templates.v1';
+        const DEFAULT_TEMPLATES = [
+            {
+                title: 'Saludo inicial',
+                body: 'Hola, gracias por escribirnos. Soy un asesor de Example Banking. ¿En qué puedo ayudarte?'
+            },
+            {
+                title: 'Horario de atención',
+                body: 'Nuestro horario de atención es de lunes a viernes, de 8:00 am a 4:00 pm. Con gusto te apoyamos por este canal.'
+            },
+            {
+                title: 'Escalamiento',
+                body: 'Voy a revisar tu caso con el equipo correspondiente y te responderé en breve por esta misma conversación.'
+            },
+            {
+                title: 'Fin de semana',
+                body: 'Gracias por escribirnos. En este momento nuestro equipo está fuera del horario de atención. Te responderemos el próximo día hábil.'
+            }
+        ];
 
         let allMessages = [];
         let contacts = {};
@@ -780,6 +903,7 @@
         let notificationsEnabled = false;
         let panelStarted = false;
         let refreshTimer = null;
+        let quickTemplates = [];
 
         function renderQrVisual() {
             const qr = document.getElementById('qr-code');
@@ -831,6 +955,8 @@
 
             document.getElementById('welcome-screen').style.display = 'none';
             document.getElementById('app-shell').style.display = 'flex';
+            loadTemplates();
+            renderTemplateChips();
 
             if (!panelStarted) {
                 panelStarted = true;
@@ -849,6 +975,7 @@
             document.getElementById('search-input').value = '';
             document.getElementById('chat-header-bar').style.display = 'none';
             document.getElementById('chat-input').style.display = 'none';
+            document.getElementById('template-strip').style.display = 'none';
             document.getElementById('edit-contact-btn').style.display = 'none';
             document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
             document.getElementById('app-shell').style.display = 'none';
@@ -898,6 +1025,21 @@
 
         function persistSavedContacts() {
             localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(savedContacts));
+        }
+
+        function syncSavedContactsIntoConversations() {
+            savedContacts.forEach(contact => {
+                const phone = normalizePhone(contact.phone || contact.telefono);
+                if (!phone || contacts[phone]) return;
+                contacts[phone] = {
+                    phone,
+                    messages: [],
+                    lastMessage: '',
+                    lastTime: '',
+                    messageCount: 0,
+                    savedOnly: true,
+                };
+            });
         }
 
         function getContactInfo(phone) {
@@ -959,9 +1101,98 @@
 
             persistSavedContacts();
             indexContact(contact);
+            syncSavedContactsIntoConversations();
             renderContacts();
             if (selectedPhone && normalizePhone(selectedPhone) === phone) renderSelectedContact();
             closeContactModal();
+        }
+
+        function loadTemplates() {
+            try {
+                quickTemplates = JSON.parse(localStorage.getItem(TEMPLATES_STORAGE_KEY) || 'null') || DEFAULT_TEMPLATES.map(template => ({ ...template }));
+                if (!Array.isArray(quickTemplates)) quickTemplates = DEFAULT_TEMPLATES.map(template => ({ ...template }));
+            } catch (error) {
+                quickTemplates = DEFAULT_TEMPLATES.map(template => ({ ...template }));
+            }
+        }
+
+        function persistTemplates() {
+            localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(quickTemplates));
+        }
+
+        function renderTemplateChips() {
+            const strip = document.getElementById('template-strip');
+            if (!strip) return;
+            strip.style.display = selectedPhone ? 'flex' : 'none';
+            strip.innerHTML = quickTemplates.map((template, index) =>
+                `<button class="template-chip" type="button" data-template-index="${index}">${escapeHtml(template.title)}</button>`
+            ).join('');
+            strip.querySelectorAll('.template-chip').forEach(button => {
+                button.addEventListener('click', () => insertTemplate(Number(button.dataset.templateIndex)));
+            });
+        }
+
+        function insertTemplate(index) {
+            const template = quickTemplates[index];
+            if (!template) return;
+            const input = document.getElementById('message-input');
+            input.value = template.body;
+            input.focus();
+        }
+
+        function openTemplatesModal() {
+            renderTemplatesModal();
+            const modal = document.getElementById('templates-modal');
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+            setTimeout(() => document.getElementById('template-title').focus(), 0);
+        }
+
+        function closeTemplatesModal() {
+            const modal = document.getElementById('templates-modal');
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+            document.getElementById('template-form').reset();
+        }
+
+        function renderTemplatesModal() {
+            const list = document.getElementById('template-list');
+            if (quickTemplates.length === 0) {
+                list.innerHTML = '<div class="empty-state">No hay plantillas guardadas.</div>';
+                return;
+            }
+            list.innerHTML = quickTemplates.map((template, index) =>
+                `<div class="template-row">
+                    <div>
+                        <strong>${escapeHtml(template.title)}</strong>
+                        <p>${escapeHtml(template.body)}</p>
+                    </div>
+                    <button class="danger-btn" type="button" data-delete-template="${index}">Eliminar</button>
+                </div>`
+            ).join('');
+            list.querySelectorAll('[data-delete-template]').forEach(button => {
+                button.addEventListener('click', () => deleteTemplate(Number(button.dataset.deleteTemplate)));
+            });
+        }
+
+        function saveTemplateFromForm(event) {
+            event.preventDefault();
+            const title = document.getElementById('template-title').value.trim();
+            const body = document.getElementById('template-body').value.trim();
+            if (!title || !body) return;
+            quickTemplates.push({ title, body });
+            persistTemplates();
+            renderTemplatesModal();
+            renderTemplateChips();
+            document.getElementById('template-form').reset();
+            document.getElementById('template-title').focus();
+        }
+
+        function deleteTemplate(index) {
+            quickTemplates.splice(index, 1);
+            persistTemplates();
+            renderTemplatesModal();
+            renderTemplateChips();
         }
 
         document.addEventListener('click', () => {
@@ -1053,6 +1284,8 @@
                 contact.lastMessage = last.message || '';
                 contact.lastTime = last.timestamp || '';
             });
+
+            syncSavedContactsIntoConversations();
         }
 
         function renderContacts() {
@@ -1080,10 +1313,16 @@
                 }) : '';
                 const contactName = getContactName(contact.phone);
                 const activeClass = contact.phone === selectedPhone ? ' active' : '';
+                const meta = contact.messageCount
+                    ? `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}`
+                    : `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}Contacto guardado`;
+                const preview = contact.lastMessage
+                    ? `<div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>`
+                    : '';
                 return `<button class="contact-item${activeClass}" data-phone="${escapeHtml(contact.phone)}">
                     <div class="phone">${contactName ? '👤 ' + escapeHtml(contactName) : '📱 ' + escapeHtml(contact.phone)}</div>
-                    <div class="meta">${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}</div>
-                    <div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>
+                    <div class="meta">${meta}</div>
+                    ${preview}
                 </button>`;
             }).join('');
 
@@ -1142,6 +1381,7 @@
             document.getElementById('chat-header-bar').style.display = 'flex';
             document.getElementById('chat-input').style.display = 'flex';
             document.getElementById('edit-contact-btn').style.display = 'inline-flex';
+            renderTemplateChips();
 
             const contactName = getContactName(selectedPhone);
             document.getElementById('chat-header').textContent = contactName
@@ -1152,6 +1392,11 @@
                 : `${contact.messageCount} mensajes`;
 
             const messagesDiv = document.getElementById('chat-messages');
+            if (contact.messages.length === 0) {
+                messagesDiv.innerHTML = '<div class="empty-state">Contacto guardado sin mensajes todavía</div>';
+                return;
+            }
+
             messagesDiv.innerHTML = contact.messages.map(message => {
                 const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString('es', {
                     hour: '2-digit', minute: '2-digit'
@@ -1235,11 +1480,18 @@
         });
 
         document.getElementById('contact-form').addEventListener('submit', saveContactFromForm);
+        document.getElementById('template-form').addEventListener('submit', saveTemplateFromForm);
         document.getElementById('contact-modal').addEventListener('click', event => {
             if (event.target.id === 'contact-modal') closeContactModal();
         });
+        document.getElementById('templates-modal').addEventListener('click', event => {
+            if (event.target.id === 'templates-modal') closeTemplatesModal();
+        });
         document.addEventListener('keydown', event => {
-            if (event.key === 'Escape') closeContactModal();
+            if (event.key === 'Escape') {
+                closeContactModal();
+                closeTemplatesModal();
+            }
         });
 
         renderQrVisual();
