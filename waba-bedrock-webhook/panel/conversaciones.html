@@ -856,7 +856,7 @@
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="secondary-btn logout-btn absence-btn" id="absence-bot-btn" onclick="openAbsenceModal()">Auto-respuesta</button>
+                <button class="secondary-btn logout-btn absence-btn" id="absence-bot-btn" onclick="openAbsenceModal()">ChatBot</button>
                 <button class="secondary-btn logout-btn" onclick="openTemplatesModal()">Plantillas</button>
                 <button class="secondary-btn logout-btn" onclick="logoutPanel()">Salir</button>
             </div>
@@ -1222,7 +1222,7 @@
             const button = document.getElementById('absence-bot-btn');
             if (!button) return;
             button.classList.toggle('active', Boolean(absenceBot.enabled));
-            button.textContent = absenceBot.enabled ? 'Auto-respuesta activa' : 'Auto-respuesta';
+            button.textContent = absenceBot.enabled ? 'ChatBot activo' : 'ChatBot';
         }
 
         async function loadAbsenceBot() {
