@@ -3,7 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Example Banking — ChattLogger</title>
+    <title>ChattLogger — Example Banking</title>
+    <link rel="icon" type="image/png" href="assets/brand/icon-cropped.png">
+    <link rel="apple-touch-icon" href="assets/brand/icon-cropped.png">
     <style>
         :root {
             --violet: #4B16B6;
@@ -854,7 +856,7 @@
                 </div>
             </div>
             <div class="topbar-actions">
-                <button class="secondary-btn logout-btn absence-btn" id="absence-bot-btn" onclick="openAbsenceModal()">Ausencia</button>
+                <button class="secondary-btn logout-btn absence-btn" id="absence-bot-btn" onclick="openAbsenceModal()">Auto-respuesta</button>
                 <button class="secondary-btn logout-btn" onclick="openTemplatesModal()">Plantillas</button>
                 <button class="secondary-btn logout-btn" onclick="logoutPanel()">Salir</button>
             </div>
@@ -942,7 +944,7 @@
     <div class="modal-backdrop" id="absence-modal" aria-hidden="true">
         <form class="modal" id="absence-form">
             <div class="modal-header">
-                <h2>Bot de ausencia</h2>
+                <h2>Auto-respuesta</h2>
             </div>
             <div class="modal-body">
                 <div class="toggle-row">
@@ -956,7 +958,7 @@
                     </label>
                 </div>
                 <div class="field">
-                    <label for="absence-message">Mensaje de ausencia</label>
+                    <label for="absence-message">Mensaje automático</label>
                     <textarea id="absence-message" name="message" required></textarea>
                 </div>
                 <div class="send-status" id="absence-status"></div>
@@ -1220,7 +1222,7 @@
             const button = document.getElementById('absence-bot-btn');
             if (!button) return;
             button.classList.toggle('active', Boolean(absenceBot.enabled));
-            button.textContent = absenceBot.enabled ? 'Ausencia activa' : 'Ausencia';
+            button.textContent = absenceBot.enabled ? 'Auto-respuesta activa' : 'Auto-respuesta';
         }
 
         async function loadAbsenceBot() {
