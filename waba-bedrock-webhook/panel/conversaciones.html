@@ -1500,9 +1500,13 @@
             return allMessages.filter(isMessageInDateRange);
         }
 
-        function applyDateFilters() {
+        function syncDateFilters() {
             dateFrom = document.getElementById('date-from').value;
             dateTo = document.getElementById('date-to').value;
+        }
+
+        function applyDateFilters() {
+            syncDateFilters();
             processMessages();
             renderContacts();
             if (selectedPhone && contacts[selectedPhone]) renderSelectedContact();
@@ -1547,6 +1551,7 @@
         function exportHistory(format) {
             const exportMenu = document.getElementById('export-menu');
             if (exportMenu) exportMenu.removeAttribute('open');
+            syncDateFilters();
             const messages = getFilteredMessages();
             const suffix = [dateFrom || 'inicio', dateTo || 'hoy'].join('_');
 
