@@ -243,14 +243,22 @@
             margin-bottom: 8px;
             gap: 12px;
             flex: 0 0 auto;
+            flex-wrap: wrap;
         }
 
         .toolbar-left {
             display: flex;
             align-items: center;
             gap: 8px;
-            width: 320px;
+            width: 370px;
             flex-wrap: nowrap;
+        }
+
+        .toolbar-filters {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
         }
 
         .icon-btn {
@@ -304,6 +312,40 @@
             border-color: var(--lilac);
         }
 
+        .export-menu {
+            position: relative;
+        }
+
+        .export-menu summary {
+            list-style: none;
+            display: inline-flex;
+            align-items: center;
+        }
+
+        .export-menu summary::-webkit-details-marker {
+            display: none;
+        }
+
+        .export-options {
+            position: absolute;
+            z-index: 10;
+            right: 0;
+            top: calc(100% + 6px);
+            min-width: 140px;
+            padding: 6px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            box-shadow: 0 18px 46px rgba(15, 15, 31, 0.16);
+            display: grid;
+            gap: 4px;
+        }
+
+        .export-options button {
+            width: 100%;
+            justify-content: flex-start;
+        }
+
         .logout-btn {
             min-height: 34px;
             padding: 0 14px;
@@ -322,9 +364,23 @@
             background: var(--surface);
         }
 
+        .date-input {
+            width: 140px;
+            height: 36px;
+            padding: 0 10px;
+            border: 1px solid var(--border);
+            border-radius: 6px;
+            font-size: 13px;
+            outline: none;
+            color: var(--text);
+            background: var(--surface);
+            font-family: inherit;
+        }
+
         .search-input:focus,
         textarea:focus,
-        .field input:focus {
+        .field input:focus,
+        .date-input:focus {
             border-color: var(--lilac);
             box-shadow: 0 0 0 3px rgba(167, 121, 255, 0.18);
         }
@@ -806,6 +862,7 @@
             .main { padding: 16px; }
             .toolbar-left { width: 100%; flex-wrap: wrap; }
             .search-input { width: 100%; }
+            .toolbar-filters { width: 100%; }
             body { overflow: auto; }
             .app-shell { height: auto; min-height: 100vh; }
             .layout { flex-direction: column; height: auto; overflow: visible; }
@@ -866,7 +923,19 @@
             <div class="toolbar">
                 <div class="toolbar-left">
                     <input class="search-input" id="search-input" type="search" placeholder="Buscar por nombre, teléfono o mensaje">
-                    <button class="icon-btn" type="button" onclick="loadConversations()" title="Actualizar conversaciones" aria-label="Actualizar conversaciones">↻</button>
+                </div>
+                <div class="toolbar-filters">
+                    <input class="date-input" id="date-from" type="date" title="Fecha inicial" aria-label="Fecha inicial">
+                    <input class="date-input" id="date-to" type="date" title="Fecha final" aria-label="Fecha final">
+                    <button class="icon-btn" type="button" onclick="applySearch()" title="Buscar" aria-label="Buscar">🔍</button>
+                    <button class="secondary-btn" type="button" onclick="clearDateFilters()">Limpiar</button>
+                    <details class="export-menu" id="export-menu">
+                        <summary class="secondary-btn">Exportar</summary>
+                        <div class="export-options">
+                            <button class="secondary-btn" type="button" onclick="exportHistory('csv')">CSV</button>
+                            <button class="secondary-btn" type="button" onclick="exportHistory('json')">JSON</button>
+                        </div>
+                    </details>
                 </div>
             </div>
 
@@ -1005,6 +1074,8 @@
         let savedContacts = [];
         let selectedPhone = null;
         let searchTerm = '';
+        let dateFrom = '';
+        let dateTo = '';
         let previousMessageCount = 0;
         let notificationsEnabled = false;
         let panelStarted = false;
@@ -1406,6 +1477,98 @@
             });
         }
 
+        function parseMessageTime(message) {
+            const time = Date.parse(message.timestamp || '');
+            return Number.isNaN(time) ? null : time;
+        }
+
+        function getDateRangeBounds() {
+            const start = dateFrom ? new Date(`${dateFrom}T00:00:00`).getTime() : null;
+            const end = dateTo ? new Date(`${dateTo}T23:59:59.999`).getTime() : null;
+            return { start, end };
+        }
+
+        function isMessageInDateRange(message) {
+            const time = parseMessageTime(message);
+            if (time === null) return !dateFrom && !dateTo;
+            const { start, end } = getDateRangeBounds();
+            if (start !== null && time < start) return false;
+            if (end !== null && time > end) return false;
+            return true;
+        }
+
+        function getFilteredMessages() {
+            return allMessages.filter(isMessageInDateRange);
+        }
+
+        function applyDateFilters() {
+            dateFrom = document.getElementById('date-from').value;
+            dateTo = document.getElementById('date-to').value;
+            processMessages();
+            renderContacts();
+            if (selectedPhone && contacts[selectedPhone]) renderSelectedContact();
+            else {
+                selectedPhone = null;
+                document.getElementById('chat-header-bar').style.display = 'none';
+                document.getElementById('chat-input').style.display = 'none';
+                document.getElementById('template-strip').style.display = 'none';
+                document.getElementById('edit-contact-btn').style.display = 'none';
+                document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
+                selectLatestContact();
+            }
+        }
+
+        function applySearch() {
+            searchTerm = document.getElementById('search-input').value;
+            renderContacts();
+        }
+
+        function clearDateFilters() {
+            document.getElementById('date-from').value = '';
+            document.getElementById('date-to').value = '';
+            applyDateFilters();
+        }
+
+        function downloadFile(filename, content, type) {
+            const blob = new Blob([content], { type });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = filename;
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        function csvValue(value) {
+            return `"${String(value ?? '').replace(/"/g, '""')}"`;
+        }
+
+        function exportHistory(format) {
+            const exportMenu = document.getElementById('export-menu');
+            if (exportMenu) exportMenu.removeAttribute('open');
+            const messages = getFilteredMessages();
+            const suffix = [dateFrom || 'inicio', dateTo || 'hoy'].join('_');
+
+            if (format === 'json') {
+                downloadFile(
+                    `historial-chattlogger-${suffix}.json`,
+                    JSON.stringify(messages, null, 2),
+                    'application/json;charset=utf-8',
+                );
+                return;
+            }
+
+            const headers = ['timestamp', 'phone_number', 'direction', 'msg_type', 'message', 'canal'];
+            const rows = messages.map(message => headers.map(key => csvValue(message[key])).join(','));
+            downloadFile(
+                `historial-chattlogger-${suffix}.csv`,
+                [headers.join(','), ...rows].join('\n'),
+                'text/csv;charset=utf-8',
+            );
+        }
+
         async function loadConversations() {
             if (!API_URL) {
                 document.getElementById('contacts-list').innerHTML =
@@ -1441,7 +1604,7 @@
 
         function processMessages() {
             contacts = {};
-            allMessages.forEach(message => {
+            getFilteredMessages().forEach(message => {
                 const phone = message.phone_number;
                 if (!phone) return;
                 if (!contacts[phone]) {
@@ -1657,10 +1820,14 @@
             }
         });
 
-        document.getElementById('search-input').addEventListener('input', event => {
-            searchTerm = event.target.value;
-            renderContacts();
+        document.getElementById('search-input').addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                applySearch();
+            }
         });
+        document.getElementById('date-from').addEventListener('change', applyDateFilters);
+        document.getElementById('date-to').addEventListener('change', applyDateFilters);
 
         document.getElementById('contact-form').addEventListener('submit', saveContactFromForm);
         document.getElementById('template-form').addEventListener('submit', saveTemplateFromForm);
