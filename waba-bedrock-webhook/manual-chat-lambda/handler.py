@@ -1,6 +1,7 @@
 import json
 import logging
 import os
+import re
 import unicodedata
 import urllib.error
 import urllib.request
@@ -185,6 +186,10 @@ def get_template_body_text(template_definition):
     return ""
 
 
+def format_template_message_text(text):
+    return re.sub(r"\{\{\s*\d+\s*\}\}", "NombreCliente", str(text or "")).strip()
+
+
 def get_template_header_image_url(sent_template, template_definition):
     sent_components = sent_template.get("components") if isinstance(sent_template, dict) else []
     if isinstance(sent_components, list):
@@ -271,6 +276,8 @@ def guardar_template_dana(event):
         mensaje = get_template_body_text(meta_template)
     else:
         meta_template = {}
+
+    mensaje = format_template_message_text(mensaje)
 
     image_url = get_template_header_image_url(template, meta_template)
     if image_url:

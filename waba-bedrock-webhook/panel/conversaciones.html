@@ -605,15 +605,16 @@
 
         .media-card {
             display: grid;
-            gap: 8px;
-            min-width: 210px;
+            gap: 10px;
+            min-width: 190px;
+            max-width: 340px;
         }
 
         .message-image {
             display: block;
             width: 100%;
-            max-width: min(420px, 100%);
-            max-height: 360px;
+            max-width: 320px;
+            max-height: 260px;
             object-fit: contain;
             border-radius: 6px;
             border: 1px solid rgba(15, 15, 31, 0.12);
@@ -648,6 +649,8 @@
             text-decoration: none;
             font-size: 12px;
             font-weight: 700;
+            font-family: inherit;
+            cursor: pointer;
         }
 
         .location-card {
@@ -1260,6 +1263,32 @@
             }[char]));
         }
 
+        function escapeJsString(value) {
+            return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, '\\n');
+        }
+
+        function formatTemplatePlaceholders(value) {
+            return String(value || '').replace(/\{\{\s*\d+\s*\}\}/g, 'NombreCliente');
+        }
+
+        async function downloadImage(url) {
+            try {
+                const response = await fetch(url);
+                if (!response.ok) throw new Error('No se pudo descargar la imagen');
+                const blob = await response.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = objectUrl;
+                link.download = 'imagen-whatsapp.jpg';
+                document.body.appendChild(link);
+                link.click();
+                link.remove();
+                URL.revokeObjectURL(objectUrl);
+            } catch (error) {
+                window.open(url, '_blank', 'noopener,noreferrer');
+            }
+        }
+
         function normalize(value) {
             return String(value || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
         }
@@ -1709,7 +1738,7 @@
         }
 
         function renderMessageContent(message) {
-            const text = String(message.message || '').trim();
+            const text = formatTemplatePlaceholders(message.message).trim();
             const imageMatch = text.match(/^\[Imagen\]:\s*(https?:\/\/\S+)/i);
             const locationMatch = text.match(/^\[Ubicacion\]:\s*([-.\d]+),\s*([-.\d]+)(.*)$/i);
 
@@ -1717,10 +1746,8 @@
                 const url = imageMatch[1];
                 const remainingText = text.slice(imageMatch[0].length).trim();
                 return `<div class="media-card">
-                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
-                        <img class="message-image" src="${escapeHtml(url)}" alt="Imagen del mensaje" loading="lazy">
-                    </a>
-                    <a class="media-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Abrir imagen</a>
+                    <img class="message-image" src="${escapeHtml(url)}" alt="Imagen del mensaje" loading="lazy">
+                    <button class="media-link" type="button" onclick="downloadImage('${escapeJsString(url)}')">Descargar imagen</button>
                     ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
                 </div>`;
             }
@@ -1772,6 +1799,8 @@
                 }) : '';
                 const direction = message.direction === 'inbound'
                     ? '👤 Cliente'
+                    : message.msg_type === 'template'
+                        ? '✍️ Plantilla DANA'
                     : message.msg_type === 'absence'
                         ? '🤖 Bot'
                         : '✍️ Agente';
