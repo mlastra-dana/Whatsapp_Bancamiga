@@ -649,8 +649,6 @@
             text-decoration: none;
             font-size: 12px;
             font-weight: 700;
-            font-family: inherit;
-            cursor: pointer;
         }
 
         .location-card {
@@ -1063,7 +1061,8 @@
         const API_URL = API_BASE_URL ? `${API_BASE_URL}/conversations` : '';
         const SEND_API_URL = API_BASE_URL ? `${API_BASE_URL}/send-message` : '';
         const ABSENCE_BOT_URL = API_BASE_URL ? `${API_BASE_URL}/absence-bot` : '';
-        const CONTACTS_URL = 'contacts.json';
+        const CONTACTS_DIRECTORY_URL = 'contacts.json';
+        const CONTACTS_API_URL = API_BASE_URL ? `${API_BASE_URL}/contacts` : '';
         const CONTACTS_STORAGE_KEY = 'chattlogger.contacts.v1';
         const SESSION_STORAGE_KEY = 'chattlogger.session.v1';
         const TEMPLATES_STORAGE_KEY = 'chattlogger.templates.v1';
@@ -1185,7 +1184,7 @@
 
         async function loadContactsDirectory() {
             try {
-                const response = await fetch(CONTACTS_URL, { cache: 'no-store' });
+                const response = await fetch(CONTACTS_DIRECTORY_URL, { cache: 'no-store' });
                 if (response.ok) {
                     const directory = await response.json();
                     if (Array.isArray(directory)) directory.forEach(indexContact);
@@ -1195,6 +1194,7 @@
             }
 
             loadSavedContacts();
+            await loadBackendContacts();
         }
 
         function normalizePhone(phone) {
@@ -1225,6 +1225,53 @@
 
         function persistSavedContacts() {
             localStorage.setItem(CONTACTS_STORAGE_KEY, JSON.stringify(savedContacts));
+        }
+
+        function upsertSavedContact(contact) {
+            const phone = normalizePhone(contact.phone || contact.telefono);
+            if (!phone) return;
+            const cleanContact = { phone, name: contact.name || contact.nombre || '' };
+            const existingIndex = savedContacts.findIndex(item => normalizePhone(item.phone || item.telefono) === phone);
+            if (existingIndex >= 0) savedContacts[existingIndex] = cleanContact;
+            else savedContacts.push(cleanContact);
+        }
+
+        async function loadBackendContacts() {
+            if (!CONTACTS_API_URL) return;
+            try {
+                const response = await fetch(CONTACTS_API_URL, { cache: 'no-store' });
+                if (!response.ok) throw new Error('No se pudo cargar contactos');
+                const backendContacts = await response.json();
+                if (!Array.isArray(backendContacts)) return;
+                backendContacts.forEach(contact => {
+                    upsertSavedContact(contact);
+                    indexContact(contact);
+                });
+                persistSavedContacts();
+            } catch (error) {
+                console.warn('No se pudieron cargar contactos guardados:', error);
+            }
+        }
+
+        async function saveContactToBackend(contact) {
+            if (!CONTACTS_API_URL) return false;
+            try {
+                const response = await fetch(CONTACTS_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(contact),
+                });
+                if (!response.ok) throw new Error('No se pudo guardar contacto');
+                const result = await response.json().catch(() => ({}));
+                if (result.contact) {
+                    upsertSavedContact(result.contact);
+                    indexContact(result.contact);
+                }
+                return true;
+            } catch (error) {
+                console.warn('No se pudo guardar contacto en backend:', error);
+                return false;
+            }
         }
 
         function syncSavedContactsIntoConversations() {
@@ -1263,30 +1310,8 @@
             }[char]));
         }
 
-        function escapeJsString(value) {
-            return String(value || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r?\n/g, '\\n');
-        }
-
         function formatTemplatePlaceholders(value) {
             return String(value || '').replace(/\{\{\s*\d+\s*\}\}/g, 'NombreCliente');
-        }
-
-        async function downloadImage(url) {
-            try {
-                const response = await fetch(url);
-                if (!response.ok) throw new Error('No se pudo descargar la imagen');
-                const blob = await response.blob();
-                const objectUrl = URL.createObjectURL(blob);
-                const link = document.createElement('a');
-                link.href = objectUrl;
-                link.download = 'imagen-whatsapp.jpg';
-                document.body.appendChild(link);
-                link.click();
-                link.remove();
-                URL.revokeObjectURL(objectUrl);
-            } catch (error) {
-                window.open(url, '_blank', 'noopener,noreferrer');
-            }
         }
 
         function normalize(value) {
@@ -1314,18 +1339,16 @@
             document.getElementById('contact-form').reset();
         }
 
-        function saveContactFromForm(event) {
+        async function saveContactFromForm(event) {
             event.preventDefault();
             const phone = normalizePhone(document.getElementById('contact-phone').value);
             const name = document.getElementById('contact-name').value.trim();
             if (!phone || !name) return;
 
             const contact = { phone, name };
-            const existingIndex = savedContacts.findIndex(item => normalizePhone(item.phone || item.telefono) === phone);
-            if (existingIndex >= 0) savedContacts[existingIndex] = contact;
-            else savedContacts.push(contact);
-
+            upsertSavedContact(contact);
             persistSavedContacts();
+            await saveContactToBackend(contact);
             indexContact(contact);
             syncSavedContactsIntoConversations();
             renderContacts();
@@ -1746,8 +1769,9 @@
                 const url = imageMatch[1];
                 const remainingText = text.slice(imageMatch[0].length).trim();
                 return `<div class="media-card">
-                    <img class="message-image" src="${escapeHtml(url)}" alt="Imagen del mensaje" loading="lazy">
-                    <button class="media-link" type="button" onclick="downloadImage('${escapeJsString(url)}')">Descargar imagen</button>
+                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+                        <img class="message-image" src="${escapeHtml(url)}" alt="Imagen del mensaje" loading="lazy">
+                    </a>
                     ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
                 </div>`;
             }

@@ -24,6 +24,7 @@ CONVERSATIONS_TABLE_NAME = os.environ.get("CONVERSATIONS_TABLE_NAME", "chat-logs
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
+CONTACT_KEY_PREFIX = "contact#"
 DEFAULT_ABSENCE_MESSAGE = (
     "Gracias por escribirnos. En este momento no hay un asesor disponible. "
     "Te responderemos apenas retomemos la atencion."
@@ -135,6 +136,58 @@ def save_absence_bot_config(enabled, message):
         "message": config["message"],
         "updated_at": config["updated_at"],
     }
+
+
+def normalize_phone(value):
+    return "".join(char for char in str(value or "") if char.isdigit())
+
+
+def list_contacts(event):
+    contacts = []
+    scan_kwargs = {}
+
+    while True:
+        result = state_table.scan(**scan_kwargs)
+        for item in result.get("Items", []):
+            key = str(item.get("telefono") or "")
+            if not key.startswith(CONTACT_KEY_PREFIX):
+                continue
+            phone = key[len(CONTACT_KEY_PREFIX):]
+            contacts.append({
+                "phone": phone,
+                "name": item.get("name") or item.get("nombre") or "",
+                "updated_at": item.get("updated_at", ""),
+            })
+
+        last_key = result.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    contacts.sort(key=lambda item: item.get("name") or item.get("phone"))
+    return response(200, contacts)
+
+
+def save_contact(event):
+    body = parse_body(event)
+    phone = normalize_phone(body.get("phone") or body.get("telefono"))
+    name = str(body.get("name") or body.get("nombre") or "").strip()
+
+    if not phone or not name:
+        return response(400, {"error": "phone and name are required"})
+
+    contact = {
+        "telefono": f"{CONTACT_KEY_PREFIX}{phone}",
+        "phone": phone,
+        "name": name[:160],
+        "updated_at": now_iso(),
+    }
+    state_table.put_item(Item=contact)
+    return response(200, {"success": True, "contact": {
+        "phone": contact["phone"],
+        "name": contact["name"],
+        "updated_at": contact["updated_at"],
+    }})
 
 
 def get_absence_bot(event):
@@ -637,6 +690,10 @@ def lambda_handler(event, context):
             return list_conversations(event)
         if method == "POST" and path == "/send-message":
             return send_message_from_panel(event)
+        if method == "GET" and path == "/contacts":
+            return list_contacts(event)
+        if method == "POST" and path == "/contacts":
+            return save_contact(event)
         if method == "POST" and path == "/dana/outbound-template":
             return guardar_template_dana(event)
         if method == "GET" and path == "/absence-bot":
