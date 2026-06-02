@@ -3,21 +3,22 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChattLogger — Example Banking</title>
-    <link rel="icon" type="image/png" href="assets/brand/icon-cropped.png">
-    <link rel="apple-touch-icon" href="assets/brand/icon-cropped.png">
+    <title>ChattLogger — Example Company</title>
+    <link rel="icon" type="image/png" href="assets/brand/icon-company.png">
+    <link rel="apple-touch-icon" href="assets/brand/icon-company.png">
     <style>
         :root {
             --violet: #4B16B6;
-            --purple: #6D28E0;
-            --lilac: #A779FF;
+            --purple: #6C3DE1;
+            --lilac: #BEA6FF;
             --navy: #0F0F1F;
-            --lavender: #F3EDFF;
+            --slate: #3B4255;
+            --lavender: #F7F5FC;
             --surface: #ffffff;
-            --surface-muted: #faf8ff;
-            --border: #e5dcf7;
+            --surface-muted: #F9F7FD;
+            --border: #E5E0F2;
             --text: #161525;
-            --muted: #68647a;
+            --muted: #5F6678;
             --success: #18a058;
             --danger: #b42318;
         }
@@ -26,7 +27,7 @@
 
         body {
             height: 100vh;
-            background: var(--lavender);
+            background: #F4F2F8;
             color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
@@ -42,7 +43,7 @@
         .welcome-screen {
             min-height: 100vh;
             background:
-                linear-gradient(180deg, var(--violet) 0 34%, var(--lavender) 34% 100%);
+                linear-gradient(180deg, #ffffff 0 96px, var(--lavender) 96px 100%);
             display: flex;
             align-items: center;
             justify-content: center;
@@ -51,10 +52,13 @@
 
         .welcome-card {
             width: min(1040px, 100%);
-            background: var(--surface);
-            border: 1px solid var(--border);
+            background:
+                radial-gradient(circle at 88% 10%, rgba(190, 166, 255, 0.22), transparent 22%),
+                linear-gradient(135deg, #4B16B6 0%, #321078 58%, #151122 100%);
+            color: #fff;
+            border: 0;
             border-radius: 8px;
-            box-shadow: 0 28px 80px rgba(15, 15, 31, 0.18);
+            box-shadow: 0 28px 80px rgba(15, 15, 31, 0.16);
             padding: 44px;
             display: grid;
             grid-template-columns: 1fr 320px;
@@ -72,7 +76,7 @@
         }
 
         .welcome-card h1 {
-            color: var(--navy);
+            color: #fff;
             font-size: 34px;
             line-height: 1.1;
             margin-bottom: 28px;
@@ -88,7 +92,7 @@
             display: flex;
             align-items: center;
             gap: 14px;
-            color: var(--text);
+            color: rgba(255, 255, 255, 0.88);
             font-size: 16px;
             font-weight: 650;
         }
@@ -96,7 +100,7 @@
         .step-number {
             width: 34px;
             height: 34px;
-            border: 1px solid var(--navy);
+            border: 1px solid rgba(255, 255, 255, 0.72);
             border-radius: 999px;
             display: inline-flex;
             align-items: center;
@@ -109,7 +113,7 @@
             display: flex;
             align-items: center;
             gap: 10px;
-            color: var(--muted);
+            color: rgba(255, 255, 255, 0.78);
             font-size: 14px;
             font-weight: 600;
             margin-bottom: 22px;
@@ -132,9 +136,9 @@
             width: min(320px, 100%);
             aspect-ratio: 1;
             background: var(--surface);
-            border: 1px solid var(--border);
+            border: 1px solid rgba(255, 255, 255, 0.22);
             border-radius: 8px;
-            box-shadow: 0 16px 42px rgba(15, 15, 31, 0.14);
+            box-shadow: 0 16px 42px rgba(15, 15, 31, 0.24);
             padding: 22px;
             position: relative;
         }
@@ -185,7 +189,7 @@
         .topbar {
             background: var(--surface);
             border-bottom: 1px solid var(--border);
-            padding: 7px 24px;
+            padding: 11px 24px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -207,8 +211,8 @@
         }
 
         .brand-logo {
-            width: 210px;
-            height: 56px;
+            width: 184px;
+            height: 54px;
             object-fit: contain;
             object-position: left center;
             display: block;
@@ -222,7 +226,7 @@
 
         .product-title h1 {
             color: var(--navy);
-            font-size: 21px;
+            font-size: 20px;
             line-height: 1.2;
             font-weight: 750;
         }
@@ -300,6 +304,15 @@
         }
 
         .primary-btn:hover { background: var(--purple); }
+
+        .welcome-card .primary-btn {
+            background: #fff;
+            color: var(--violet);
+        }
+
+        .welcome-card .primary-btn:hover {
+            background: #F0EAFF;
+        }
 
         .secondary-btn {
             background: var(--surface);
@@ -399,6 +412,7 @@
             border: 1px solid var(--border);
             border-radius: 8px;
             overflow: hidden;
+            box-shadow: 0 16px 46px rgba(15, 15, 31, 0.06);
         }
 
         .contacts-panel {
@@ -487,8 +501,8 @@
             padding: 18px 24px;
             background:
                 radial-gradient(circle at 24px 24px, rgba(255, 255, 255, 0.75) 1px, transparent 2px),
-                linear-gradient(135deg, rgba(167, 121, 255, 0.08) 25%, transparent 25%, transparent 50%, rgba(167, 121, 255, 0.08) 50%, rgba(167, 121, 255, 0.08) 75%, transparent 75%),
-                #fbfaff;
+                linear-gradient(135deg, rgba(190, 166, 255, 0.08) 25%, transparent 25%, transparent 50%, rgba(190, 166, 255, 0.08) 50%, rgba(190, 166, 255, 0.08) 75%, transparent 75%),
+                #FCFBFF;
             background-size: 52px 52px, 44px 44px;
             display: flex;
             flex-direction: column;
@@ -577,9 +591,9 @@
         }
 
         .message.outbound {
-            background: #e6dcff;
+            background: #EEE7FF;
             color: var(--navy);
-            border: 1px solid #d8c8ff;
+            border: 1px solid #DED2FF;
             align-self: flex-end;
             margin-left: auto;
             border-bottom-right-radius: 4px;
@@ -901,12 +915,12 @@
     <section class="welcome-screen" id="welcome-screen">
         <div class="welcome-card">
             <div>
-                <img class="welcome-logo" src="assets/brand/logo-banking-cropped.png" alt="Example Banking">
+                <img class="welcome-logo" src="assets/brand/logo-company-white.png" alt="Example Company">
                 <h1>ChattLogger</h1>
                 <div class="welcome-steps">
-                    <div class="welcome-step"><span class="step-number">1</span>Entra al panel de atención.</div>
-                    <div class="welcome-step"><span class="step-number">2</span>Selecciona una conversación.</div>
-                    <div class="welcome-step"><span class="step-number">3</span>Responde manualmente por WhatsApp.</div>
+                    <div class="welcome-step"><span class="step-number">1</span>Entra al panel de auditoría.</div>
+                    <div class="welcome-step"><span class="step-number">2</span>Revisa conversaciones y plantillas.</div>
+                    <div class="welcome-step"><span class="step-number">3</span>Da seguimiento manual por WhatsApp.</div>
                 </div>
                 <label class="remember-row">
                     <input type="checkbox" id="remember-session" checked>
@@ -932,7 +946,7 @@
     <div class="app-shell" id="app-shell" style="display:none;">
         <header class="topbar">
             <div class="brand-lockup">
-                <img class="brand-logo" src="assets/brand/logo-banking-cropped.png" alt="Example Banking">
+                <img class="brand-logo" src="assets/brand/logo-company.png" alt="Example Company">
                 <div class="product-title">
                     <h1>ChattLogger</h1>
                 </div>
@@ -1092,7 +1106,7 @@
         const DEFAULT_TEMPLATES = [
             {
                 title: 'Saludo inicial',
-                body: 'Hola, gracias por escribirnos. Soy un asesor de Example Banking. ¿En qué puedo ayudarte?'
+                body: 'Hola, gracias por escribirnos. Soy un asesor de Example Company. ¿En qué puedo ayudarte?'
             },
             {
                 title: 'Horario de atención',
