@@ -609,6 +609,22 @@
             min-width: 210px;
         }
 
+        .message-image {
+            display: block;
+            width: 100%;
+            max-width: min(420px, 100%);
+            max-height: 360px;
+            object-fit: contain;
+            border-radius: 6px;
+            border: 1px solid rgba(15, 15, 31, 0.12);
+            background: var(--surface);
+        }
+
+        .media-body {
+            margin-top: 4px;
+            white-space: pre-wrap;
+        }
+
         .media-label {
             display: flex;
             align-items: center;
@@ -1699,9 +1715,13 @@
 
             if (imageMatch) {
                 const url = imageMatch[1];
+                const remainingText = text.slice(imageMatch[0].length).trim();
                 return `<div class="media-card">
-                    <div class="media-label">🖼️ Imagen recibida</div>
+                    <a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">
+                        <img class="message-image" src="${escapeHtml(url)}" alt="Imagen del mensaje" loading="lazy">
+                    </a>
                     <a class="media-link" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">Abrir imagen</a>
+                    ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
                 </div>`;
             }
 

@@ -21,6 +21,7 @@ VERIFY_TOKEN = os.environ.get("WHATSAPP_VERIFY_TOKEN", "")
 STATE_TABLE_NAME = os.environ.get("STATE_TABLE_NAME", "chat-state")
 CONVERSATIONS_TABLE_NAME = os.environ.get("CONVERSATIONS_TABLE_NAME", "chat-logs")
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
+GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
 DEFAULT_ABSENCE_MESSAGE = (
     "Gracias por escribirnos. En este momento no hay un asesor disponible. "
@@ -162,6 +163,138 @@ def guardar_mensaje(telefono, mensaje, direccion, msg_type="text"):
             "msg_type": msg_type,
         }
     )
+
+
+def strip_gateway_status_prefix(value):
+    text = str(value or "").strip()
+    if len(text) > 4 and text[:3].isdigit() and text[3] == ":":
+        return text[4:].strip()
+    return text
+
+
+def get_template_body_text(template_definition):
+    components = template_definition.get("components") if isinstance(template_definition, dict) else []
+    if not isinstance(components, list):
+        return ""
+
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        if str(component.get("type") or "").upper() == "BODY":
+            return str(component.get("text") or "").strip()
+    return ""
+
+
+def get_template_header_image_url(sent_template, template_definition):
+    sent_components = sent_template.get("components") if isinstance(sent_template, dict) else []
+    if isinstance(sent_components, list):
+        for component in sent_components:
+            if not isinstance(component, dict):
+                continue
+            if str(component.get("type") or "").lower() != "header":
+                continue
+            parameters = component.get("parameters")
+            if not isinstance(parameters, list):
+                continue
+            for parameter in parameters:
+                if not isinstance(parameter, dict):
+                    continue
+                image = parameter.get("image") if isinstance(parameter.get("image"), dict) else {}
+                link = str(image.get("link") or "").strip()
+                if link:
+                    return link
+
+    meta_components = template_definition.get("components") if isinstance(template_definition, dict) else []
+    if isinstance(meta_components, list):
+        for component in meta_components:
+            if not isinstance(component, dict):
+                continue
+            if str(component.get("type") or "").upper() != "HEADER":
+                continue
+            example = component.get("example") if isinstance(component.get("example"), dict) else {}
+            header_handles = example.get("header_handle")
+            if isinstance(header_handles, list) and header_handles:
+                return str(header_handles[0] or "").strip()
+
+    return ""
+
+
+def fetch_meta_template(template_id):
+    if not WHATSAPP_TOKEN:
+        logger.warning("WHATSAPP_TOKEN/WHATSAPP_ACCESS_TOKEN is not configured; cannot fetch template")
+        return {}
+
+    clean_template_id = str(template_id or "").strip()
+    if not clean_template_id:
+        return {}
+
+    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{clean_template_id}"
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {WHATSAPP_TOKEN}")
+
+    try:
+        with urllib.request.urlopen(req, timeout=15) as res:
+            return json.loads(res.read().decode("utf-8") or "{}")
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("Meta template fetch failed status=%s body=%s", exc.code, error_body[:5000])
+    except Exception:
+        logger.exception("Meta template fetch failed")
+    return {}
+
+
+def guardar_template_dana(event):
+    if conversations_table is None:
+        return response(500, {"error": "CONVERSATIONS_TABLE_NAME is not configured"})
+
+    body = parse_body(event)
+    telefono = str(body.get("to") or body.get("phone") or body.get("telefono") or "").strip()
+    template = body.get("template") if isinstance(body.get("template"), dict) else {}
+    template_name = str(template.get("name") or body.get("template_name") or "").strip()
+    logger.info(
+        "DANA outbound-template received phone=%s template=%s has_message=%s message_preview=%s",
+        telefono,
+        template_name,
+        "message" in body,
+        str(body.get("message") or "")[:120],
+    )
+
+    if not telefono or not template_name:
+        return response(400, {"error": "to and template.name are required"})
+
+    timestamp = str(body.get("sent_at") or now_iso())
+    mensaje = strip_gateway_status_prefix(body.get("message"))
+    template_id = body.get("template_id") or body.get("meta_template_id")
+
+    if not mensaje and template_id:
+        meta_template = fetch_meta_template(template_id)
+        mensaje = get_template_body_text(meta_template)
+    else:
+        meta_template = {}
+
+    image_url = get_template_header_image_url(template, meta_template)
+    if image_url:
+        mensaje = f"[Imagen]: {image_url}\n\n{mensaje}".strip()
+
+    mensaje = str(mensaje or f"[Plantilla]: {template_name}")[:5000]
+
+    conversations_table.put_item(
+        Item={
+            "telefono": telefono,
+            "timestamp": timestamp,
+            "mensaje": mensaje,
+            "tipo": "salida",
+            "canal": body.get("channel") or "whatsapp",
+            "msg_type": "template",
+            "provider": body.get("provider") or "dana",
+            "source_flow": body.get("source_flow") or "",
+            "template_name": template_name,
+            "template_id": str(template_id or ""),
+            "template_payload": body,
+        }
+    )
+
+    return response(200, {"success": True, "phone": telefono, "template_name": template_name})
 
 
 def normalizar_log_para_panel(item):
@@ -497,6 +630,8 @@ def lambda_handler(event, context):
             return list_conversations(event)
         if method == "POST" and path == "/send-message":
             return send_message_from_panel(event)
+        if method == "POST" and path == "/dana/outbound-template":
+            return guardar_template_dana(event)
         if method == "GET" and path == "/absence-bot":
             return get_absence_bot(event)
         if method == "POST" and path == "/absence-bot":
