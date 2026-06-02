@@ -774,6 +774,14 @@
             line-height: 1.35;
         }
 
+        .row-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-wrap: wrap;
+            justify-content: flex-end;
+        }
+
         .danger-btn {
             min-height: 30px;
             padding: 0 10px;
@@ -931,6 +939,7 @@
             </div>
             <div class="topbar-actions">
                 <button class="secondary-btn logout-btn absence-btn" id="absence-bot-btn" onclick="openAbsenceModal()">ChatBot</button>
+                <button class="secondary-btn logout-btn" onclick="openContactsModal()">Contactos</button>
                 <button class="secondary-btn logout-btn" onclick="openTemplatesModal()">Plantillas</button>
                 <button class="secondary-btn logout-btn" onclick="logoutPanel()">Salir</button>
             </div>
@@ -1001,6 +1010,20 @@
                 <button class="primary-btn" type="submit">Guardar</button>
             </div>
         </form>
+    </div>
+
+    <div class="modal-backdrop" id="contacts-modal" aria-hidden="true">
+        <div class="modal large">
+            <div class="modal-header">
+                <h2>Contactos</h2>
+            </div>
+            <div class="modal-body">
+                <div class="template-list" id="contacts-modal-list"></div>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary-btn" type="button" onclick="closeContactsModal()">Cerrar</button>
+            </div>
+        </div>
     </div>
 
     <div class="modal-backdrop" id="templates-modal" aria-hidden="true">
@@ -1236,6 +1259,15 @@
             else savedContacts.push(cleanContact);
         }
 
+        function removeSavedContact(phone) {
+            const normalizedPhone = normalizePhone(phone);
+            savedContacts = savedContacts.filter(contact =>
+                normalizePhone(contact.phone || contact.telefono) !== normalizedPhone
+            );
+            delete contactsMap[normalizedPhone];
+            if (normalizedPhone.startsWith('58')) delete contactsMap[normalizedPhone.substring(2)];
+        }
+
         async function loadBackendContacts() {
             if (!CONTACTS_API_URL) return;
             try {
@@ -1339,6 +1371,54 @@
             document.getElementById('contact-form').reset();
         }
 
+        function openContactsModal() {
+            renderContactsModal();
+            const modal = document.getElementById('contacts-modal');
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeContactsModal() {
+            const modal = document.getElementById('contacts-modal');
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function renderContactsModal() {
+            const list = document.getElementById('contacts-modal-list');
+            const sortedContacts = [...savedContacts]
+                .map(contact => ({
+                    phone: normalizePhone(contact.phone || contact.telefono),
+                    name: contact.name || contact.nombre || '',
+                }))
+                .filter(contact => contact.phone && contact.name)
+                .sort((a, b) => a.name.localeCompare(b.name));
+
+            if (sortedContacts.length === 0) {
+                list.innerHTML = '<div class="empty-state">No hay contactos guardados.</div>';
+                return;
+            }
+
+            list.innerHTML = sortedContacts.map(contact =>
+                `<div class="template-row">
+                    <div>
+                        <strong>${escapeHtml(contact.name)}</strong>
+                        <p>${escapeHtml(contact.phone)}</p>
+                    </div>
+                    <div class="row-actions">
+                        <button class="secondary-btn" type="button" data-edit-contact="${escapeHtml(contact.phone)}">Editar</button>
+                    </div>
+                </div>`
+            ).join('');
+
+            list.querySelectorAll('[data-edit-contact]').forEach(button => {
+                button.addEventListener('click', () => {
+                    closeContactsModal();
+                    openContactModal(button.dataset.editContact);
+                });
+            });
+        }
+
         async function saveContactFromForm(event) {
             event.preventDefault();
             const phone = normalizePhone(document.getElementById('contact-phone').value);
@@ -1352,6 +1432,7 @@
             indexContact(contact);
             syncSavedContactsIntoConversations();
             renderContacts();
+            renderContactsModal();
             if (selectedPhone && normalizePhone(selectedPhone) === phone) renderSelectedContact();
             closeContactModal();
         }
@@ -1797,10 +1878,10 @@
 
             document.getElementById('chat-header-bar').style.display = 'flex';
             document.getElementById('chat-input').style.display = 'flex';
-            document.getElementById('edit-contact-btn').style.display = 'inline-flex';
             renderTemplateChips();
 
             const contactName = getContactName(selectedPhone);
+            document.getElementById('edit-contact-btn').style.display = contactName ? 'none' : 'inline-flex';
             document.getElementById('chat-header').textContent = contactName
                 ? contactName
                 : selectedPhone;
@@ -1912,6 +1993,9 @@
         document.getElementById('contact-modal').addEventListener('click', event => {
             if (event.target.id === 'contact-modal') closeContactModal();
         });
+        document.getElementById('contacts-modal').addEventListener('click', event => {
+            if (event.target.id === 'contacts-modal') closeContactsModal();
+        });
         document.getElementById('templates-modal').addEventListener('click', event => {
             if (event.target.id === 'templates-modal') closeTemplatesModal();
         });
@@ -1921,6 +2005,7 @@
         document.addEventListener('keydown', event => {
             if (event.key === 'Escape') {
                 closeContactModal();
+                closeContactsModal();
                 closeTemplatesModal();
                 closeAbsenceModal();
             }
