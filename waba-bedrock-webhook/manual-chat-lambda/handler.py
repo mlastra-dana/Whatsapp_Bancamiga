@@ -25,6 +25,7 @@ CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
 CONTACT_KEY_PREFIX = "contact#"
+READ_STATE_KEY_PREFIX = "read#"
 DEFAULT_ABSENCE_MESSAGE = (
     "Gracias por escribirnos. En este momento no hay un asesor disponible. "
     "Te responderemos apenas retomemos la atencion."
@@ -188,6 +189,48 @@ def save_contact(event):
         "name": contact["name"],
         "updated_at": contact["updated_at"],
     }})
+
+
+def list_read_state(event):
+    read_state = {}
+    scan_kwargs = {}
+
+    while True:
+        result = state_table.scan(**scan_kwargs)
+        for item in result.get("Items", []):
+            key = str(item.get("telefono") or "")
+            if not key.startswith(READ_STATE_KEY_PREFIX):
+                continue
+            phone = key[len(READ_STATE_KEY_PREFIX):]
+            last_read_at = str(item.get("last_read_at") or "")
+            if phone and last_read_at:
+                read_state[phone] = last_read_at
+
+        last_key = result.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    return response(200, read_state)
+
+
+def save_read_state(event):
+    body = parse_body(event)
+    phone = normalize_phone(body.get("phone") or body.get("telefono"))
+    last_read_at = str(body.get("last_read_at") or body.get("timestamp") or "").strip()
+
+    if not phone or not last_read_at:
+        return response(400, {"error": "phone and last_read_at are required"})
+
+    state_table.put_item(
+        Item={
+            "telefono": f"{READ_STATE_KEY_PREFIX}{phone}",
+            "phone": phone,
+            "last_read_at": last_read_at,
+            "updated_at": now_iso(),
+        }
+    )
+    return response(200, {"success": True, "phone": phone, "last_read_at": last_read_at})
 
 
 def get_absence_bot(event):
@@ -694,6 +737,10 @@ def lambda_handler(event, context):
             return list_contacts(event)
         if method == "POST" and path == "/contacts":
             return save_contact(event)
+        if method == "GET" and path == "/read-state":
+            return list_read_state(event)
+        if method == "POST" and path == "/read-state":
+            return save_read_state(event)
         if method == "POST" and path == "/dana/outbound-template":
             return guardar_template_dana(event)
         if method == "GET" and path == "/absence-bot":

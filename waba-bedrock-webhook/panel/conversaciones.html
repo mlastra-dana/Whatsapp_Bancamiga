@@ -1132,6 +1132,7 @@
         const ABSENCE_BOT_URL = API_BASE_URL ? `${API_BASE_URL}/absence-bot` : '';
         const CONTACTS_DIRECTORY_URL = 'contacts.json';
         const CONTACTS_API_URL = API_BASE_URL ? `${API_BASE_URL}/contacts` : '';
+        const READ_STATE_API_URL = API_BASE_URL ? `${API_BASE_URL}/read-state` : '';
         const CONTACTS_STORAGE_KEY = 'chattlogger.contacts.v1';
         const READ_STATE_STORAGE_KEY = 'chattlogger.readState.v1';
         const SESSION_STORAGE_KEY = 'chattlogger.session.v1';
@@ -1235,7 +1236,7 @@
 
             if (!panelStarted) {
                 panelStarted = true;
-                loadContactsDirectory().then(() => loadConversations());
+                Promise.all([loadContactsDirectory(), loadBackendReadState()]).then(() => loadConversations());
                 refreshTimer = setInterval(loadConversations, REFRESH_INTERVAL_MS);
             }
         }
@@ -1712,6 +1713,33 @@
             localStorage.setItem(READ_STATE_STORAGE_KEY, JSON.stringify(readState));
         }
 
+        async function loadBackendReadState() {
+            if (!READ_STATE_API_URL) return;
+            try {
+                const response = await fetch(READ_STATE_API_URL, { cache: 'no-store' });
+                if (!response.ok) throw new Error('No se pudo cargar estado de lectura');
+                const backendReadState = await response.json();
+                if (!backendReadState || typeof backendReadState !== 'object' || Array.isArray(backendReadState)) return;
+                readState = { ...readState, ...backendReadState };
+                persistReadState();
+            } catch (error) {
+                console.warn('No se pudo cargar estado de lectura:', error);
+            }
+        }
+
+        async function saveReadStateToBackend(phone, lastReadAt) {
+            if (!READ_STATE_API_URL || !phone || !lastReadAt) return;
+            try {
+                await fetch(READ_STATE_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ phone, last_read_at: lastReadAt }),
+                });
+            } catch (error) {
+                console.warn('No se pudo guardar estado de lectura:', error);
+            }
+        }
+
         function messageId(message) {
             return [
                 message.phone_number || '',
@@ -1737,6 +1765,19 @@
             return Object.values(contacts).reduce((total, contact) => total + getUnreadCount(contact), 0);
         }
 
+        function initializeReadStateFromCurrentContacts() {
+            Object.values(contacts).forEach(contact => {
+                if (readState[contact.phone]) return;
+                const latestInbound = [...contact.messages]
+                    .filter(message => message.direction === 'inbound')
+                    .sort((a, b) => compareTimestamp(b.timestamp, a.timestamp))[0];
+                if (latestInbound && latestInbound.timestamp) {
+                    readState[contact.phone] = latestInbound.timestamp;
+                }
+            });
+            persistReadState();
+        }
+
         function updateUnreadTitle() {
             const total = getTotalUnreadCount();
             document.title = total > 0
@@ -1754,6 +1795,7 @@
             if (!latestInbound || !latestInbound.timestamp) return;
             readState[contact.phone] = latestInbound.timestamp;
             persistReadState();
+            saveReadStateToBackend(contact.phone, latestInbound.timestamp);
         }
 
         function parseMessageTime(message) {
@@ -1864,6 +1906,7 @@
                 const response = await fetch(API_URL);
                 const newMessages = await response.json();
                 allMessages = Array.isArray(newMessages) ? newMessages : [];
+                const isInitialLoad = firstConversationLoad;
 
                 const inboundMessages = allMessages.filter(message => message.direction === 'inbound');
                 const newInbound = inboundMessages.filter(message => !knownInboundIds.has(messageId(message)));
@@ -1882,6 +1925,9 @@
                 firstConversationLoad = false;
 
                 processMessages();
+                if (isInitialLoad && Object.keys(readState).length === 0) {
+                    initializeReadStateFromCurrentContacts();
+                }
                 if (selectedPhone && contacts[selectedPhone]) markContactRead(selectedPhone);
                 renderContacts();
                 if (selectedPhone && contacts[selectedPhone]) renderSelectedContact();
