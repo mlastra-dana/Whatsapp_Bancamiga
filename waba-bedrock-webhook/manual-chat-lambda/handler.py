@@ -251,11 +251,12 @@ def list_agents(event):
                 last_seen_ts = datetime.fromisoformat(last_seen).timestamp()
             except ValueError:
                 last_seen_ts = 0
+            is_online = bool(item.get("online", True)) and (now_ts - last_seen_ts) <= 90
             agents.append({
                 "username": username,
                 "name": item.get("name") or username,
                 "last_seen": last_seen,
-                "online": (now_ts - last_seen_ts) <= 90,
+                "online": is_online,
             })
 
         last_key = result.get("LastEvaluatedKey")
@@ -271,6 +272,7 @@ def save_agent_presence(event):
     body = parse_body(event)
     username = str(body.get("username") or body.get("agent_username") or "").strip().lower()
     name = str(body.get("name") or body.get("agent_name") or username).strip()
+    online = bool(body.get("online", True))
 
     if not username:
         return response(400, {"error": "username is required"})
@@ -280,13 +282,14 @@ def save_agent_presence(event):
         "username": username,
         "name": name[:160],
         "last_seen": now_iso(),
+        "online": online,
     }
     state_table.put_item(Item=item)
     return response(200, {"success": True, "agent": {
         "username": item["username"],
         "name": item["name"],
         "last_seen": item["last_seen"],
-        "online": True,
+        "online": item["online"],
     }})
 
 
