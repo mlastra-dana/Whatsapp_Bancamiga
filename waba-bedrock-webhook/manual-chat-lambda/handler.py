@@ -24,6 +24,7 @@ CONVERSATIONS_TABLE_NAME = os.environ.get("CONVERSATIONS_TABLE_NAME", "chat-logs
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
+TEMPLATES_STATE_KEY = "__quick_templates__"
 CONTACT_KEY_PREFIX = "contact#"
 READ_STATE_KEY_PREFIX = "read#"
 AGENT_KEY_PREFIX = "agent#"
@@ -190,6 +191,55 @@ def save_contact(event):
         "name": contact["name"],
         "updated_at": contact["updated_at"],
     }})
+
+
+def normalize_quick_templates(value):
+    if not isinstance(value, list):
+        return []
+
+    templates = []
+    for template in value:
+        if not isinstance(template, dict):
+            continue
+        title = str(template.get("title") or "").strip()
+        body = str(template.get("body") or "").strip()
+        if not title or not body:
+            continue
+        templates.append({
+            "title": title[:120],
+            "body": body[:2000],
+        })
+    return templates[:50]
+
+
+def list_templates(event):
+    try:
+        res = state_table.get_item(Key={"telefono": TEMPLATES_STATE_KEY})
+        item = res.get("Item") or {}
+    except Exception:
+        logger.exception("Could not read quick templates")
+        item = {}
+
+    return response(200, {
+        "templates": normalize_quick_templates(item.get("templates")),
+        "updated_at": item.get("updated_at", ""),
+    })
+
+
+def save_templates(event):
+    body = parse_body(event)
+    templates = normalize_quick_templates(body.get("templates"))
+    item = {
+        "telefono": TEMPLATES_STATE_KEY,
+        "templates": templates,
+        "updated_at": now_iso(),
+    }
+    state_table.put_item(Item=item)
+    return response(200, {
+        "success": True,
+        "templates": templates,
+        "updated_at": item["updated_at"],
+    })
 
 
 def list_read_state(event):
@@ -804,6 +854,10 @@ def lambda_handler(event, context):
             return list_contacts(event)
         if method == "POST" and path == "/contacts":
             return save_contact(event)
+        if method == "GET" and path == "/templates":
+            return list_templates(event)
+        if method == "POST" and path == "/templates":
+            return save_templates(event)
         if method == "GET" and path == "/read-state":
             return list_read_state(event)
         if method == "POST" and path == "/read-state":

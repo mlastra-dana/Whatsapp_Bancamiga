@@ -1105,7 +1105,7 @@
             </div>
             <div class="modal-actions">
                 <button class="secondary-btn" type="button" onclick="closeTemplatesModal()">Cerrar</button>
-                <button class="primary-btn" type="submit">Agregar plantilla</button>
+                <button class="primary-btn" id="template-submit-btn" type="submit">Agregar plantilla</button>
             </div>
         </form>
     </div>
@@ -1147,6 +1147,7 @@
         const ABSENCE_BOT_URL = API_BASE_URL ? `${API_BASE_URL}/absence-bot` : '';
         const CONTACTS_DIRECTORY_URL = 'contacts.json';
         const CONTACTS_API_URL = API_BASE_URL ? `${API_BASE_URL}/contacts` : '';
+        const TEMPLATES_API_URL = API_BASE_URL ? `${API_BASE_URL}/templates` : '';
         const READ_STATE_API_URL = API_BASE_URL ? `${API_BASE_URL}/read-state` : '';
         const AGENTS_API_URL = API_BASE_URL ? `${API_BASE_URL}/agents` : '';
         const AGENT_PRESENCE_URL = API_BASE_URL ? `${API_BASE_URL}/agent-presence` : '';
@@ -1203,6 +1204,7 @@
         let currentAgent = null;
         let onlineAgents = [];
         let quickTemplates = [];
+        let editingTemplateIndex = null;
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
@@ -1278,9 +1280,8 @@
 
             document.getElementById('welcome-screen').style.display = 'none';
             document.getElementById('app-shell').style.display = 'flex';
-            loadTemplates();
+            loadTemplates().then(renderTemplateChips);
             loadReadState();
-            renderTemplateChips();
             loadAbsenceBot();
 
             if (!panelStarted) {
@@ -1621,17 +1622,50 @@
             }
         }
 
-        function loadTemplates() {
+        async function loadTemplates() {
             try {
                 quickTemplates = JSON.parse(localStorage.getItem(TEMPLATES_STORAGE_KEY) || 'null') || DEFAULT_TEMPLATES.map(template => ({ ...template }));
                 if (!Array.isArray(quickTemplates)) quickTemplates = DEFAULT_TEMPLATES.map(template => ({ ...template }));
             } catch (error) {
                 quickTemplates = DEFAULT_TEMPLATES.map(template => ({ ...template }));
             }
+
+            if (!TEMPLATES_API_URL) return;
+
+            try {
+                const response = await fetch(TEMPLATES_API_URL, { cache: 'no-store' });
+                if (!response.ok) throw new Error('No se pudieron cargar plantillas');
+                const data = await response.json();
+                if (Array.isArray(data.templates) && data.updated_at) {
+                    quickTemplates = data.templates;
+                } else {
+                    await persistTemplates();
+                }
+            } catch (error) {
+                console.warn('No se pudieron cargar plantillas del backend:', error);
+            }
         }
 
-        function persistTemplates() {
+        async function persistTemplates() {
             localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(quickTemplates));
+            if (!TEMPLATES_API_URL) return false;
+            try {
+                const response = await fetch(TEMPLATES_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ templates: quickTemplates }),
+                });
+                if (!response.ok) throw new Error('No se pudieron guardar plantillas');
+                const data = await response.json().catch(() => ({}));
+                if (Array.isArray(data.templates)) {
+                    quickTemplates = data.templates;
+                    localStorage.setItem(TEMPLATES_STORAGE_KEY, JSON.stringify(quickTemplates));
+                }
+                return true;
+            } catch (error) {
+                console.warn('No se pudieron guardar plantillas en backend:', error);
+                return false;
+            }
         }
 
         function renderTemplateChips() {
@@ -1654,8 +1688,10 @@
             input.focus();
         }
 
-        function openTemplatesModal() {
+        async function openTemplatesModal() {
+            await loadTemplates();
             renderTemplatesModal();
+            renderTemplateChips();
             const modal = document.getElementById('templates-modal');
             modal.classList.add('open');
             modal.setAttribute('aria-hidden', 'false');
@@ -1667,6 +1703,8 @@
             modal.classList.remove('open');
             modal.setAttribute('aria-hidden', 'true');
             document.getElementById('template-form').reset();
+            editingTemplateIndex = null;
+            document.getElementById('template-submit-btn').textContent = 'Agregar plantilla';
         }
 
         function renderTemplatesModal() {
@@ -1681,30 +1719,55 @@
                         <strong>${escapeHtml(template.title)}</strong>
                         <p>${escapeHtml(template.body)}</p>
                     </div>
+                    <button class="secondary-btn" type="button" data-edit-template="${index}">Editar</button>
                     <button class="danger-btn" type="button" data-delete-template="${index}">Eliminar</button>
                 </div>`
             ).join('');
+            list.querySelectorAll('[data-edit-template]').forEach(button => {
+                button.addEventListener('click', () => editTemplate(Number(button.dataset.editTemplate)));
+            });
             list.querySelectorAll('[data-delete-template]').forEach(button => {
                 button.addEventListener('click', () => deleteTemplate(Number(button.dataset.deleteTemplate)));
             });
         }
 
-        function saveTemplateFromForm(event) {
+        async function saveTemplateFromForm(event) {
             event.preventDefault();
             const title = document.getElementById('template-title').value.trim();
             const body = document.getElementById('template-body').value.trim();
             if (!title || !body) return;
-            quickTemplates.push({ title, body });
-            persistTemplates();
+            if (editingTemplateIndex !== null && quickTemplates[editingTemplateIndex]) {
+                quickTemplates[editingTemplateIndex] = { title, body };
+            } else {
+                quickTemplates.push({ title, body });
+            }
+            await persistTemplates();
             renderTemplatesModal();
             renderTemplateChips();
             document.getElementById('template-form').reset();
+            editingTemplateIndex = null;
+            document.getElementById('template-submit-btn').textContent = 'Agregar plantilla';
             document.getElementById('template-title').focus();
         }
 
-        function deleteTemplate(index) {
+        function editTemplate(index) {
+            const template = quickTemplates[index];
+            if (!template) return;
+            editingTemplateIndex = index;
+            document.getElementById('template-title').value = template.title;
+            document.getElementById('template-body').value = template.body;
+            document.getElementById('template-submit-btn').textContent = 'Guardar cambios';
+            document.getElementById('template-title').focus();
+        }
+
+        async function deleteTemplate(index) {
             quickTemplates.splice(index, 1);
-            persistTemplates();
+            if (editingTemplateIndex === index) {
+                editingTemplateIndex = null;
+                document.getElementById('template-form').reset();
+                document.getElementById('template-submit-btn').textContent = 'Agregar plantilla';
+            }
+            await persistTemplates();
             renderTemplatesModal();
             renderTemplateChips();
         }
