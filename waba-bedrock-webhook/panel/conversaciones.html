@@ -1909,13 +1909,12 @@
 
         function updateDashboard() {
             const agentCount = onlineAgents.length;
-            const agentNames = onlineAgents.map(agent => agent.name || agent.username);
             const pendingChats = getPendingChatsCount();
             const unreadMessages = getTotalUnreadCount();
 
             document.getElementById('online-agents-count').textContent = String(agentCount);
-            document.getElementById('online-agents-list').textContent = agentNames.length
-                ? agentNames.join(', ')
+            document.getElementById('online-agents-list').textContent = agentCount
+                ? 'Asesores activos'
                 : 'Sin asesores activos';
             document.getElementById('pending-chats-count').textContent = String(pendingChats);
             document.getElementById('pending-chats-detail').textContent = unreadMessages
