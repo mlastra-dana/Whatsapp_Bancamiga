@@ -375,6 +375,39 @@ def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_usernam
     conversations_table.put_item(Item=item)
 
 
+def mark_conversation_attended(telefono):
+    if conversations_table is None:
+        return
+
+    try:
+        result = conversations_table.query(
+            KeyConditionExpression=Key("telefono").eq(telefono),
+            ScanIndexForward=False,
+            Limit=50,
+        )
+        latest_inbound = next(
+            (
+                item for item in result.get("Items", [])
+                if (item.get("tipo") or item.get("direction")) in {"entrada", "inbound"}
+            ),
+            None,
+        )
+        if not latest_inbound or not latest_inbound.get("timestamp"):
+            return
+
+        phone = normalize_phone(telefono)
+        state_table.put_item(
+            Item={
+                "telefono": f"{READ_STATE_KEY_PREFIX}{phone}",
+                "phone": phone,
+                "last_read_at": latest_inbound["timestamp"],
+                "updated_at": now_iso(),
+            }
+        )
+    except Exception:
+        logger.exception("Could not mark conversation as attended")
+
+
 def strip_gateway_status_prefix(value):
     text = str(value or "").strip()
     if len(text) > 4 and text[:3].isdigit() and text[3] == ":":
@@ -674,6 +707,7 @@ def send_message_from_panel(event):
     try:
         result = enviar_whatsapp(telefono, mensaje)
         guardar_mensaje(telefono, mensaje, "salida", "manual", agent_username, agent_name)
+        mark_conversation_attended(telefono)
         return response(200, {"success": True, "result": result})
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
