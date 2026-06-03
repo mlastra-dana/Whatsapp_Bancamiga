@@ -26,6 +26,7 @@ GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
 CONTACT_KEY_PREFIX = "contact#"
 READ_STATE_KEY_PREFIX = "read#"
+AGENT_KEY_PREFIX = "agent#"
 DEFAULT_ABSENCE_MESSAGE = (
     "Gracias por escribirnos. En este momento no hay un asesor disponible. "
     "Te responderemos apenas retomemos la atencion."
@@ -233,6 +234,62 @@ def save_read_state(event):
     return response(200, {"success": True, "phone": phone, "last_read_at": last_read_at})
 
 
+def list_agents(event):
+    now_ts = datetime.now(timezone.utc).timestamp()
+    agents = []
+    scan_kwargs = {}
+
+    while True:
+        result = state_table.scan(**scan_kwargs)
+        for item in result.get("Items", []):
+            key = str(item.get("telefono") or "")
+            if not key.startswith(AGENT_KEY_PREFIX):
+                continue
+            username = key[len(AGENT_KEY_PREFIX):]
+            last_seen = str(item.get("last_seen") or "")
+            try:
+                last_seen_ts = datetime.fromisoformat(last_seen).timestamp()
+            except ValueError:
+                last_seen_ts = 0
+            agents.append({
+                "username": username,
+                "name": item.get("name") or username,
+                "last_seen": last_seen,
+                "online": (now_ts - last_seen_ts) <= 90,
+            })
+
+        last_key = result.get("LastEvaluatedKey")
+        if not last_key:
+            break
+        scan_kwargs["ExclusiveStartKey"] = last_key
+
+    agents.sort(key=lambda item: (not item["online"], item["name"]))
+    return response(200, agents)
+
+
+def save_agent_presence(event):
+    body = parse_body(event)
+    username = str(body.get("username") or body.get("agent_username") or "").strip().lower()
+    name = str(body.get("name") or body.get("agent_name") or username).strip()
+
+    if not username:
+        return response(400, {"error": "username is required"})
+
+    item = {
+        "telefono": f"{AGENT_KEY_PREFIX}{username}",
+        "username": username,
+        "name": name[:160],
+        "last_seen": now_iso(),
+    }
+    state_table.put_item(Item=item)
+    return response(200, {"success": True, "agent": {
+        "username": item["username"],
+        "name": item["name"],
+        "last_seen": item["last_seen"],
+        "online": True,
+    }})
+
+
 def get_absence_bot(event):
     return response(200, get_absence_bot_config())
 
@@ -244,22 +301,25 @@ def update_absence_bot(event):
     return response(200, save_absence_bot_config(enabled, message))
 
 
-def guardar_mensaje(telefono, mensaje, direccion, msg_type="text"):
+def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_username="", agent_name=""):
     if conversations_table is None:
         logger.warning("CONVERSATIONS_TABLE_NAME is not configured; message was not logged")
         return
 
     tipo = "entrada" if direccion in {"entrada", "inbound"} else "salida"
-    conversations_table.put_item(
-        Item={
-            "telefono": telefono,
-            "timestamp": now_iso(),
-            "mensaje": str(mensaje)[:1000],
-            "tipo": tipo,
-            "canal": "whatsapp",
-            "msg_type": msg_type,
-        }
-    )
+    item = {
+        "telefono": telefono,
+        "timestamp": now_iso(),
+        "mensaje": str(mensaje)[:1000],
+        "tipo": tipo,
+        "canal": "whatsapp",
+        "msg_type": msg_type,
+    }
+    if agent_username:
+        item["agent_username"] = str(agent_username)[:80]
+    if agent_name:
+        item["agent_name"] = str(agent_name)[:160]
+    conversations_table.put_item(Item=item)
 
 
 def strip_gateway_status_prefix(value):
@@ -410,6 +470,8 @@ def normalizar_log_para_panel(item):
         "message": item.get("mensaje") or item.get("message") or "",
         "msg_type": item.get("msg_type") or tipo,
         "canal": item.get("canal", "whatsapp"),
+        "agent_username": item.get("agent_username") or "",
+        "agent_name": item.get("agent_name") or "",
     }
 
 
@@ -550,13 +612,15 @@ def send_message_from_panel(event):
     body = parse_body(event)
     telefono = str(body.get("phone", "")).strip()
     mensaje = str(body.get("message", "")).strip()
+    agent_username = str(body.get("agent_username") or "").strip()
+    agent_name = str(body.get("agent_name") or agent_username or "").strip()
 
     if not telefono or not mensaje:
         return response(400, {"error": "phone and message are required"})
 
     try:
         result = enviar_whatsapp(telefono, mensaje)
-        guardar_mensaje(telefono, mensaje, "salida", "manual")
+        guardar_mensaje(telefono, mensaje, "salida", "manual", agent_username, agent_name)
         return response(200, {"success": True, "result": result})
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
@@ -741,6 +805,10 @@ def lambda_handler(event, context):
             return list_read_state(event)
         if method == "POST" and path == "/read-state":
             return save_read_state(event)
+        if method == "GET" and path == "/agents":
+            return list_agents(event)
+        if method == "POST" and path == "/agent-presence":
+            return save_agent_presence(event)
         if method == "POST" and path == "/dana/outbound-template":
             return guardar_template_dana(event)
         if method == "GET" and path == "/absence-bot":

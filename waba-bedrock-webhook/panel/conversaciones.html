@@ -51,7 +51,7 @@
         }
 
         .welcome-card {
-            width: min(1040px, 100%);
+            width: min(520px, 100%);
             background:
                 radial-gradient(circle at 88% 10%, rgba(190, 166, 255, 0.22), transparent 22%),
                 linear-gradient(135deg, #4B16B6 0%, #321078 58%, #151122 100%);
@@ -60,10 +60,6 @@
             border-radius: 8px;
             box-shadow: 0 28px 80px rgba(15, 15, 31, 0.16);
             padding: 44px;
-            display: grid;
-            grid-template-columns: 1fr 320px;
-            gap: 44px;
-            align-items: center;
         }
 
         .welcome-logo {
@@ -82,33 +78,6 @@
             margin-bottom: 28px;
         }
 
-        .welcome-steps {
-            display: grid;
-            gap: 18px;
-            margin-bottom: 28px;
-        }
-
-        .welcome-step {
-            display: flex;
-            align-items: center;
-            gap: 14px;
-            color: rgba(255, 255, 255, 0.88);
-            font-size: 16px;
-            font-weight: 650;
-        }
-
-        .step-number {
-            width: 34px;
-            height: 34px;
-            border: 1px solid rgba(255, 255, 255, 0.72);
-            border-radius: 999px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex: 0 0 auto;
-            font-size: 14px;
-        }
-
         .remember-row {
             display: flex;
             align-items: center;
@@ -125,65 +94,65 @@
             accent-color: var(--violet);
         }
 
-        .welcome-visual {
-            min-height: 320px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .qr-card {
-            width: min(320px, 100%);
-            aspect-ratio: 1;
-            background: var(--surface);
-            border: 1px solid rgba(255, 255, 255, 0.22);
-            border-radius: 8px;
-            box-shadow: 0 16px 42px rgba(15, 15, 31, 0.24);
-            padding: 22px;
-            position: relative;
-        }
-
-        .qr-code {
-            width: 100%;
-            height: 100%;
-            background: #fff;
-            border: 14px solid #fff;
+        .login-fields {
             display: grid;
-            grid-template-columns: repeat(29, 1fr);
-            grid-template-rows: repeat(29, 1fr);
-            gap: 3px;
-            position: relative;
-            overflow: hidden;
+            gap: 10px;
+            max-width: 340px;
+            margin-bottom: 16px;
         }
 
-        .qr-module {
-            background: transparent;
-            border-radius: 1px;
+        .login-fields input {
+            min-height: 40px;
+            border: 1px solid rgba(255, 255, 255, 0.28);
+            border-radius: 6px;
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+            padding: 0 12px;
+            font: inherit;
+            outline: none;
         }
 
-        .qr-module.on { background: #1d1630; }
-        .qr-module.finder { background: #1d1630; }
-        .qr-module.finder-light { background: #fff; }
+        .login-fields input::placeholder {
+            color: rgba(255, 255, 255, 0.62);
+        }
 
-        .qr-center {
-            position: absolute;
-            z-index: 2;
-            inset: 50% auto auto 50%;
-            width: 82px;
-            height: 82px;
-            transform: translate(-50%, -50%);
-            background: #fff;
-            border-radius: 999px;
+        .login-fields input:focus {
+            border-color: rgba(255, 255, 255, 0.72);
+            box-shadow: 0 0 0 3px rgba(190, 166, 255, 0.24);
+        }
+
+        .login-error {
+            color: #FFE3E0;
+            font-size: 12px;
+            font-weight: 700;
+            min-height: 18px;
+            margin-bottom: 8px;
+        }
+
+        .demo-login-row {
             display: flex;
-            align-items: center;
-            justify-content: center;
-            box-shadow: 0 12px 28px rgba(15, 15, 31, 0.18);
+            flex-wrap: wrap;
+            gap: 10px;
+            max-width: 340px;
+            margin-bottom: 16px;
         }
 
-        .qr-center svg {
-            width: 42px;
-            height: 42px;
-            stroke: var(--violet);
+        .demo-login-btn {
+            min-height: 36px;
+            border: 1px solid rgba(255, 255, 255, 0.32);
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.13);
+            color: #fff;
+            padding: 0 14px;
+            font: inherit;
+            font-size: 13px;
+            font-weight: 750;
+            cursor: pointer;
+        }
+
+        .demo-login-btn:hover {
+            background: rgba(255, 255, 255, 0.22);
+            border-color: rgba(255, 255, 255, 0.58);
         }
 
         .topbar {
@@ -248,6 +217,47 @@
             gap: 12px;
             flex: 0 0 auto;
             flex-wrap: wrap;
+        }
+
+        .ops-dashboard {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 10px;
+            margin-bottom: 10px;
+            flex: 0 0 auto;
+        }
+
+        .metric-card {
+            min-height: 64px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            padding: 10px 12px;
+            box-shadow: 0 12px 32px rgba(15, 15, 31, 0.05);
+        }
+
+        .metric-label {
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            color: var(--navy);
+            font-size: 19px;
+            font-weight: 850;
+            line-height: 1.1;
+        }
+
+        .metric-subtext {
+            color: var(--muted);
+            font-size: 12px;
+            margin-top: 4px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
         }
 
         .toolbar-left {
@@ -923,14 +933,14 @@
 
         @media (max-width: 768px) {
             .welcome-screen { padding: 18px; align-items: flex-start; }
-            .welcome-card { grid-template-columns: 1fr; padding: 28px; gap: 28px; }
+            .welcome-card { padding: 28px; }
             .welcome-logo { width: 220px; height: 64px; }
             .welcome-card h1 { font-size: 28px; }
-            .welcome-visual { min-height: 240px; }
             .topbar { align-items: flex-start; flex-direction: column; }
             .brand-logo { width: 220px; height: 64px; }
             .product-title { border-left: 0; padding-left: 0; }
             .main { padding: 16px; }
+            .ops-dashboard { grid-template-columns: 1fr; }
             .toolbar-left { width: 100%; flex-wrap: wrap; }
             .search-input { width: 100%; }
             .toolbar-filters { width: 100%; }
@@ -949,28 +959,20 @@
             <div>
                 <img class="welcome-logo" src="assets/brand/logo-company-white.png" alt="Example Company">
                 <h1>ChattLogger</h1>
-                <div class="welcome-steps">
-                    <div class="welcome-step"><span class="step-number">1</span>Entra al panel de auditoría.</div>
-                    <div class="welcome-step"><span class="step-number">2</span>Revisa conversaciones y plantillas.</div>
-                    <div class="welcome-step"><span class="step-number">3</span>Da seguimiento manual por WhatsApp.</div>
+                <div class="login-fields">
+                    <input id="login-username" autocomplete="username" placeholder="Usuario">
+                    <input id="login-password" type="password" autocomplete="current-password" placeholder="Contraseña">
                 </div>
+                <div class="demo-login-row" aria-label="Accesos rápidos de demo">
+                    <button class="demo-login-btn" type="button" onclick="fillDemoLogin('ssalas')">Sarina Salas</button>
+                    <button class="demo-login-btn" type="button" onclick="fillDemoLogin('mlastra')">Maria Lastra</button>
+                </div>
+                <div class="login-error" id="login-error"></div>
                 <label class="remember-row">
                     <input type="checkbox" id="remember-session" checked>
                     Mantener sesión iniciada en este navegador
                 </label>
                 <button class="primary-btn" onclick="enterPanel()">Iniciar</button>
-            </div>
-            <div class="welcome-visual" aria-hidden="true">
-                <div class="qr-card">
-                    <div class="qr-code" id="qr-code">
-                        <span class="qr-center">
-                            <svg viewBox="0 0 48 48" fill="none" aria-hidden="true">
-                                <path d="M36.5 32.8c-1.4 3.3-5.3 5.6-9.8 5.6-8.1 0-14.7-6.2-14.7-13.9S18.6 10.6 26.7 10.6s14.7 6.2 14.7 13.9c0 2.8-.9 5.4-2.4 7.6l1.1 5.3-5.2-1.3" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                                <path d="M21.1 18.8c.5-1.1 1.1-1.2 1.7-1.2h1.2c.4 0 .9.1 1.2.9.4.9 1.3 3.1 1.4 3.3.1.3.2.7 0 1.1-.3.5-.5.8-.9 1.2-.4.4-.8.8-.3 1.6.5.8 2 3.1 4.2 4.3 1.7.9 2.1.8 2.8.1.5-.5 1-1.4 1.6-1.3.6.2 3.4 1.6 4 1.9.5.3.9.4 1 .7.2.8-.4 2.5-1.4 3.3" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
-                            </svg>
-                        </span>
-                    </div>
-                </div>
             </div>
         </div>
     </section>
@@ -992,6 +994,23 @@
         </header>
 
         <main class="main">
+            <div class="ops-dashboard">
+                <div class="metric-card">
+                    <div class="metric-label">Agente actual</div>
+                    <div class="metric-value" id="current-agent-metric">-</div>
+                    <div class="metric-subtext" id="current-agent-status">Sesión activa</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Agentes conectados</div>
+                    <div class="metric-value" id="online-agents-count">0</div>
+                    <div class="metric-subtext" id="online-agents-list">Sin agentes activos</div>
+                </div>
+                <div class="metric-card">
+                    <div class="metric-label">Chats pendientes</div>
+                    <div class="metric-value" id="pending-chats-count">0</div>
+                    <div class="metric-subtext" id="pending-chats-detail">Sin pendientes</div>
+                </div>
+            </div>
             <div class="toolbar">
                 <div class="toolbar-left">
                     <input class="search-input" id="search-input" type="search" placeholder="Buscar por nombre, teléfono o mensaje">
@@ -1133,11 +1152,19 @@
         const CONTACTS_DIRECTORY_URL = 'contacts.json';
         const CONTACTS_API_URL = API_BASE_URL ? `${API_BASE_URL}/contacts` : '';
         const READ_STATE_API_URL = API_BASE_URL ? `${API_BASE_URL}/read-state` : '';
+        const AGENTS_API_URL = API_BASE_URL ? `${API_BASE_URL}/agents` : '';
+        const AGENT_PRESENCE_URL = API_BASE_URL ? `${API_BASE_URL}/agent-presence` : '';
         const CONTACTS_STORAGE_KEY = 'chattlogger.contacts.v1';
         const READ_STATE_STORAGE_KEY = 'chattlogger.readState.v1';
         const SESSION_STORAGE_KEY = 'chattlogger.session.v1';
+        const AGENT_SESSION_STORAGE_KEY = 'chattlogger.agent.v1';
         const TEMPLATES_STORAGE_KEY = 'chattlogger.templates.v1';
         const REFRESH_INTERVAL_MS = 2000;
+        const AGENT_HEARTBEAT_MS = 15000;
+        const DEMO_AGENTS = {
+            ssalas: { username: 'ssalas', name: 'Sarina Salas', password: 'S@r1na-72Qx!' },
+            mlastra: { username: 'mlastra', name: 'Maria Lastra', password: 'M@r1a-94Vz!' },
+        };
         const DEFAULT_TEMPLATES = [
             {
                 title: 'Saludo inicial',
@@ -1173,58 +1200,60 @@
         let notificationAudioContext = null;
         let panelStarted = false;
         let refreshTimer = null;
+        let presenceTimer = null;
+        let currentAgent = null;
+        let onlineAgents = [];
         let quickTemplates = [];
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
         };
 
-        function renderQrVisual() {
-            const qr = document.getElementById('qr-code');
-            if (!qr || qr.dataset.rendered) return;
-            qr.dataset.rendered = 'true';
-
-            const size = 29;
-            const centerMin = 11;
-            const centerMax = 17;
-            const isFinder = (x, y, ox, oy) => {
-                const dx = x - ox;
-                const dy = y - oy;
-                if (dx < 0 || dy < 0 || dx > 6 || dy > 6) return null;
-                if (dx === 0 || dy === 0 || dx === 6 || dy === 6) return 'finder';
-                if (dx >= 2 && dx <= 4 && dy >= 2 && dy <= 4) return 'finder';
-                return 'finder-light';
-            };
-
-            for (let y = 0; y < size; y++) {
-                for (let x = 0; x < size; x++) {
-                    const module = document.createElement('span');
-                    module.className = 'qr-module';
-
-                    const finder =
-                        isFinder(x, y, 0, 0) ||
-                        isFinder(x, y, size - 7, 0) ||
-                        isFinder(x, y, 0, size - 7);
-
-                    if (finder) {
-                        module.classList.add(finder);
-                    } else if (!(x >= centerMin && x <= centerMax && y >= centerMin && y <= centerMax)) {
-                        const value = (x * 17 + y * 31 + x * y * 7 + (x ^ y) * 11) % 9;
-                        if (value === 0 || value === 2 || value === 5 || (x + y) % 11 === 0) {
-                            module.classList.add('on');
-                        }
-                    }
-
-                    qr.insertBefore(module, qr.firstChild);
-                }
-            }
+        function getDemoAgent(username, password) {
+            const normalizedUsername = String(username || '').trim().toLowerCase();
+            const agent = DEMO_AGENTS[normalizedUsername];
+            if (!agent || agent.password !== String(password || '')) return null;
+            return { username: agent.username, name: agent.name };
         }
 
-        function enterPanel() {
+        function setLoginError(message) {
+            document.getElementById('login-error').textContent = message || '';
+        }
+
+        function fillDemoLogin(username) {
+            const agent = DEMO_AGENTS[String(username || '').toLowerCase()];
+            if (!agent) return;
+            document.getElementById('login-username').value = agent.username;
+            document.getElementById('login-password').value = agent.password;
+            setLoginError('');
+        }
+
+        function setCurrentAgent(agent) {
+            currentAgent = agent;
+            document.getElementById('current-agent-metric').textContent = agent ? agent.name : '-';
+            document.getElementById('current-agent-status').textContent = agent ? agent.username : 'Sin sesión';
+        }
+
+        function enterPanel(agent = null) {
+            const loginAgent = agent || getDemoAgent(
+                document.getElementById('login-username').value,
+                document.getElementById('login-password').value,
+            );
+
+            if (!loginAgent) {
+                setLoginError('Usuario o contraseña inválidos.');
+                return;
+            }
+
+            setLoginError('');
+            setCurrentAgent(loginAgent);
+
             if (document.getElementById('remember-session').checked) {
                 localStorage.setItem(SESSION_STORAGE_KEY, 'active');
+                localStorage.setItem(AGENT_SESSION_STORAGE_KEY, JSON.stringify(loginAgent));
             } else {
                 localStorage.removeItem(SESSION_STORAGE_KEY);
+                localStorage.removeItem(AGENT_SESSION_STORAGE_KEY);
             }
 
             document.getElementById('welcome-screen').style.display = 'none';
@@ -1238,14 +1267,21 @@
                 panelStarted = true;
                 Promise.all([loadContactsDirectory(), loadBackendReadState()]).then(() => loadConversations());
                 refreshTimer = setInterval(loadConversations, REFRESH_INTERVAL_MS);
+                sendAgentPresence();
+                presenceTimer = setInterval(sendAgentPresence, AGENT_HEARTBEAT_MS);
+                loadAgents();
             }
         }
 
         function logoutPanel() {
             localStorage.removeItem(SESSION_STORAGE_KEY);
+            localStorage.removeItem(AGENT_SESSION_STORAGE_KEY);
             if (refreshTimer) clearInterval(refreshTimer);
+            if (presenceTimer) clearInterval(presenceTimer);
             refreshTimer = null;
+            presenceTimer = null;
             panelStarted = false;
+            setCurrentAgent(null);
             selectedPhone = null;
             searchTerm = '';
             document.getElementById('search-input').value = '';
@@ -1257,6 +1293,7 @@
             document.getElementById('app-shell').style.display = 'none';
             document.getElementById('welcome-screen').style.display = 'flex';
             document.getElementById('remember-session').checked = false;
+            document.getElementById('login-password').value = '';
         }
 
         async function loadContactsDirectory() {
@@ -1740,6 +1777,63 @@
             }
         }
 
+        async function sendAgentPresence() {
+            if (!AGENT_PRESENCE_URL || !currentAgent) return;
+            try {
+                await fetch(AGENT_PRESENCE_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        username: currentAgent.username,
+                        name: currentAgent.name,
+                    }),
+                });
+                await loadAgents();
+            } catch (error) {
+                console.warn('No se pudo actualizar presencia:', error);
+            }
+        }
+
+        async function loadAgents() {
+            if (!AGENTS_API_URL) return;
+            try {
+                const response = await fetch(AGENTS_API_URL, { cache: 'no-store' });
+                if (!response.ok) throw new Error('No se pudo cargar agentes');
+                const agents = await response.json();
+                onlineAgents = Array.isArray(agents)
+                    ? agents
+                        .filter(agent => agent.online)
+                        .map(agent => ({
+                            ...agent,
+                            name: DEMO_AGENTS[agent.username]?.name || agent.name || agent.username,
+                        }))
+                    : [];
+                updateDashboard();
+            } catch (error) {
+                console.warn('No se pudieron cargar agentes:', error);
+            }
+        }
+
+        function getPendingChatsCount() {
+            return Object.values(contacts).filter(contact => getUnreadCount(contact) > 0).length;
+        }
+
+        function updateDashboard() {
+            const agentCount = onlineAgents.length;
+            const agentNames = onlineAgents.map(agent => agent.name || agent.username);
+            const pendingChats = getPendingChatsCount();
+            const unreadMessages = getTotalUnreadCount();
+
+            document.getElementById('online-agents-count').textContent = String(agentCount);
+            document.getElementById('online-agents-list').textContent = agentNames.length
+                ? agentNames.join(', ')
+                : 'Sin agentes activos';
+            document.getElementById('pending-chats-count').textContent = String(pendingChats);
+            document.getElementById('pending-chats-detail').textContent = unreadMessages
+                ? `${unreadMessages} mensajes sin leer`
+                : 'Sin pendientes';
+        }
+
         function messageId(message) {
             return [
                 message.phone_number || '',
@@ -2019,6 +2113,7 @@
             });
 
             updateUnreadTitle();
+            updateDashboard();
         }
 
         function selectContact(phone) {
@@ -2098,13 +2193,14 @@
                 const date = message.timestamp ? new Date(message.timestamp).toLocaleDateString('es', {
                     month: 'short', day: 'numeric'
                 }) : '';
+                const agentLabel = message.agent_name || message.agent_username || 'Agente';
                 const direction = message.direction === 'inbound'
                     ? '👤 Cliente'
                     : message.msg_type === 'template'
                         ? '✍️ Plantilla DANA'
                     : message.msg_type === 'absence'
                         ? '🤖 Bot'
-                        : '✍️ Agente';
+                        : `✍️ ${agentLabel}`;
                 return `<div class="message ${message.direction || 'inbound'}"><div class="direction">${direction}</div><div>${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
@@ -2118,6 +2214,11 @@
             const message = input.value.trim();
 
             if (!message || !selectedPhone) return;
+            if (!currentAgent) {
+                status.className = 'send-status error';
+                status.textContent = 'Inicia sesión para responder.';
+                return;
+            }
             if (!SEND_API_URL) {
                 status.className = 'send-status error';
                 status.textContent = 'Falta configurar VITE_API_URL en Amplify.';
@@ -2133,7 +2234,12 @@
                 const response = await fetch(SEND_API_URL, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ phone: selectedPhone, message }),
+                    body: JSON.stringify({
+                        phone: selectedPhone,
+                        message,
+                        agent_username: currentAgent.username,
+                        agent_name: currentAgent.name,
+                    }),
                 });
 
                 if (!response.ok) {
@@ -2148,6 +2254,8 @@
                     direction: 'outbound',
                     message,
                     msg_type: 'manual',
+                    agent_username: currentAgent.username,
+                    agent_name: currentAgent.name,
                 });
                 processMessages();
                 renderContacts();
@@ -2172,6 +2280,15 @@
                 event.preventDefault();
                 sendMessage();
             }
+        });
+
+        ['login-username', 'login-password'].forEach(id => {
+            document.getElementById(id).addEventListener('keydown', event => {
+                if (event.key === 'Enter') {
+                    event.preventDefault();
+                    enterPanel();
+                }
+            });
         });
 
         document.getElementById('search-input').addEventListener('keydown', event => {
@@ -2213,10 +2330,13 @@
             }
         });
 
-        renderQrVisual();
-
         if (localStorage.getItem(SESSION_STORAGE_KEY) === 'active') {
-            enterPanel();
+            try {
+                const savedAgent = JSON.parse(localStorage.getItem(AGENT_SESSION_STORAGE_KEY) || 'null');
+                if (savedAgent && savedAgent.username) {
+                    enterPanel(savedAgent);
+                }
+            } catch (error) {}
         }
     </script>
 </body>
