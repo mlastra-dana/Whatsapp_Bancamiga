@@ -992,14 +992,14 @@
         <main class="main">
             <div class="ops-dashboard">
                 <div class="metric-card">
-                    <div class="metric-label">Agente actual</div>
+                    <div class="metric-label">Asesor actual</div>
                     <div class="metric-value" id="current-agent-metric">-</div>
                     <div class="metric-subtext" id="current-agent-status">Sesión activa</div>
                 </div>
                 <div class="metric-card">
-                    <div class="metric-label">Agentes conectados</div>
+                    <div class="metric-label">Asesores conectados</div>
                     <div class="metric-value" id="online-agents-count">0</div>
-                    <div class="metric-subtext" id="online-agents-list">Sin agentes activos</div>
+                    <div class="metric-subtext" id="online-agents-list">Sin asesores activos</div>
                 </div>
                 <div class="metric-card">
                     <div class="metric-label">Chats pendientes</div>
@@ -1887,7 +1887,7 @@
             if (!AGENTS_API_URL) return;
             try {
                 const response = await fetch(AGENTS_API_URL, { cache: 'no-store' });
-                if (!response.ok) throw new Error('No se pudo cargar agentes');
+                if (!response.ok) throw new Error('No se pudo cargar asesores');
                 const agents = await response.json();
                 onlineAgents = Array.isArray(agents)
                     ? agents
@@ -1899,7 +1899,7 @@
                     : [];
                 updateDashboard();
             } catch (error) {
-                console.warn('No se pudieron cargar agentes:', error);
+                console.warn('No se pudieron cargar asesores:', error);
             }
         }
 
@@ -1916,7 +1916,7 @@
             document.getElementById('online-agents-count').textContent = String(agentCount);
             document.getElementById('online-agents-list').textContent = agentNames.length
                 ? agentNames.join(', ')
-                : 'Sin agentes activos';
+                : 'Sin asesores activos';
             document.getElementById('pending-chats-count').textContent = String(pendingChats);
             document.getElementById('pending-chats-detail').textContent = unreadMessages
                 ? `${unreadMessages} mensajes sin leer`
@@ -2282,14 +2282,14 @@
                 const date = message.timestamp ? new Date(message.timestamp).toLocaleDateString('es', {
                     month: 'short', day: 'numeric'
                 }) : '';
-                const agentLabel = message.agent_name || message.agent_username || 'Agente';
+                const advisorLabel = message.agent_name || message.agent_username || 'Asesor';
                 const direction = message.direction === 'inbound'
                     ? '👤 Cliente'
                     : message.msg_type === 'template'
                         ? '✍️ Plantilla DANA'
                     : message.msg_type === 'absence'
                         ? '🤖 Bot'
-                        : `✍️ ${agentLabel}`;
+                        : `✍️ ${advisorLabel}`;
                 return `<div class="message ${message.direction || 'inbound'}"><div class="direction">${direction}</div><div>${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
