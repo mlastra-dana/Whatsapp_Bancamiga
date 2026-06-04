@@ -246,7 +246,7 @@
 
         .metric-value {
             color: var(--navy);
-            font-size: 19px;
+            font-size: 28px;
             font-weight: 850;
             line-height: 1.1;
         }
@@ -1924,12 +1924,12 @@
 
             document.getElementById('online-agents-count').textContent = String(agentCount);
             document.getElementById('online-agents-list').textContent = agentCount
-                ? 'Asesores activos'
-                : 'Sin asesores activos';
+                ? ''
+                : 'Sin conectados';
             document.getElementById('pending-chats-count').textContent = String(pendingChats);
             document.getElementById('pending-chats-detail').textContent = unreadMessages
-                ? `${unreadMessages} mensajes sin leer`
-                : 'Sin pendientes';
+                ? ''
+                : '';
         }
 
         function messageId(message) {
