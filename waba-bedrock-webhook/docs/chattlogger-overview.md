@@ -115,9 +115,18 @@ GET https://graph.facebook.com/v20.0/{TEMPLATE_ID}
 Con esa respuesta obtiene:
 
 - texto del body de la plantilla;
-- imagen de header si existe;
+- imagen de header si existe como fallback;
 - nombre de la plantilla;
 - payload original.
+
+Para imagenes de plantillas enviadas desde DANA, el Lambda prioriza links publicos enviados en el POST, por ejemplo:
+
+- `url_imagen`
+- `image_url`
+- `header_image_url`
+- `media_url`
+
+Esto es importante porque la imagen de ejemplo que devuelve Meta en `header_handle` puede venir desde `scontent.whatsapp.net` y expirar. Si DANA envia el link publico real usado en la plantilla, ese link se guarda en el historial y el panel lo renderiza directo, sin pasar por el proxy de media temporal.
 
 Los placeholders como `{{1}}` se reemplazan por `NombreCliente` para que el historial identifique que habia una variable sin depender del cliente especifico.
 

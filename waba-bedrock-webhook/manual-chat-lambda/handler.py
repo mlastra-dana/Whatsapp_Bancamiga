@@ -501,7 +501,25 @@ def format_template_message_text(text):
     return re.sub(r"\{\{\s*\d+\s*\}\}", "NombreCliente", str(text or "")).strip()
 
 
-def get_template_header_image_url(sent_template, template_definition):
+def get_public_template_image_url(body):
+    for key in ("url_imagen", "image_url", "header_image_url", "media_url"):
+        value = str(body.get(key) or "").strip()
+        if value:
+            return value
+
+    image = body.get("image") if isinstance(body.get("image"), dict) else {}
+    link = str(image.get("link") or image.get("url") or "").strip()
+    if link:
+        return link
+
+    return ""
+
+
+def get_template_header_image_url(body, sent_template, template_definition):
+    public_image_url = get_public_template_image_url(body)
+    if public_image_url:
+        return public_image_url
+
     sent_components = sent_template.get("components") if isinstance(sent_template, dict) else []
     if isinstance(sent_components, list):
         for component in sent_components:
@@ -590,7 +608,7 @@ def guardar_template_dana(event):
 
     mensaje = format_template_message_text(mensaje)
 
-    image_url = get_template_header_image_url(template, meta_template)
+    image_url = get_template_header_image_url(body, template, meta_template)
     if image_url:
         mensaje = f"[Imagen]: {image_url}\n\n{mensaje}".strip()
 

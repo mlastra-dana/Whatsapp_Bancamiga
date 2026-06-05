@@ -1682,8 +1682,22 @@
         }
 
         function proxiedMediaUrl(url) {
-            if (!API_BASE_URL || !url) return url;
+            if (!API_BASE_URL || !url || !isMetaMediaUrl(url)) return url;
             return `${API_BASE_URL}/media?url=${encodeURIComponent(url)}`;
+        }
+
+        function isMetaMediaUrl(url) {
+            try {
+                const host = new URL(url).hostname.toLowerCase();
+                return host === 'lookaside.fbsbx.com'
+                    || host.endsWith('.lookaside.fbsbx.com')
+                    || host === 'lookaside.facebook.com'
+                    || host.endsWith('.lookaside.facebook.com')
+                    || host === 'scontent.whatsapp.net'
+                    || host.endsWith('.scontent.whatsapp.net');
+            } catch (error) {
+                return false;
+            }
         }
 
         function loadExpiredMediaUrls() {
