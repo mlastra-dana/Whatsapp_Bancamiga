@@ -736,6 +736,14 @@
             line-height: 1.25;
         }
 
+        .media-unavailable {
+            display: none;
+            color: var(--danger);
+            font-size: 12px;
+            font-weight: 800;
+            line-height: 1.25;
+        }
+
         @keyframes media-spin {
             to { transform: rotate(360deg); }
         }
@@ -801,6 +809,15 @@
             display: block;
         }
 
+        .audio-card.expired audio,
+        .audio-card.expired .audio-title {
+            display: none;
+        }
+
+        .audio-card.expired .media-unavailable {
+            display: block;
+        }
+
         .document-card {
             width: min(330px, 100%);
             min-height: 76px;
@@ -821,6 +838,21 @@
             border-color: rgba(75, 22, 182, 0.34);
             background: #EEE7FF;
             text-decoration: none;
+        }
+
+        .document-card.expired {
+            background: linear-gradient(135deg, #fff, #f2edf9);
+            border-color: rgba(180, 35, 24, 0.18);
+            cursor: default;
+        }
+
+        .document-card.expired .document-title,
+        .document-card.expired .document-meta {
+            display: none;
+        }
+
+        .document-card.expired .media-unavailable {
+            display: block;
         }
 
         .document-icon {
@@ -1339,6 +1371,7 @@
         const AGENT_SESSION_STORAGE_KEY = 'chattlogger.agent.v1';
         const LAST_ACTIVITY_STORAGE_KEY = 'chattlogger.lastActivity.v1';
         const TEMPLATES_STORAGE_KEY = 'chattlogger.templates.v1';
+        const EXPIRED_MEDIA_STORAGE_KEY = 'chattlogger.expiredMedia.v1';
         const REFRESH_INTERVAL_MS = 2000;
         const AGENT_HEARTBEAT_MS = 15000;
         const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
@@ -1388,6 +1421,7 @@
         let onlineAgents = [];
         let quickTemplates = [];
         let editingTemplateIndex = null;
+        let expiredMediaUrls = new Set(loadExpiredMediaUrls());
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
@@ -1650,6 +1684,72 @@
         function proxiedMediaUrl(url) {
             if (!API_BASE_URL || !url) return url;
             return `${API_BASE_URL}/media?url=${encodeURIComponent(url)}`;
+        }
+
+        function loadExpiredMediaUrls() {
+            try {
+                const stored = JSON.parse(localStorage.getItem(EXPIRED_MEDIA_STORAGE_KEY) || '[]');
+                return Array.isArray(stored) ? stored : [];
+            } catch (error) {
+                return [];
+            }
+        }
+
+        function markMediaUnavailable(element, mediaUrl = '') {
+            if (!element) return;
+            const urls = [
+                mediaUrl,
+                element.dataset.mediaUrl,
+                element.dataset.proxyUrl,
+                element.getAttribute('href'),
+            ].filter(Boolean);
+            if (urls.length) {
+                urls.forEach(url => expiredMediaUrls.add(url));
+                localStorage.setItem(EXPIRED_MEDIA_STORAGE_KEY, JSON.stringify([...expiredMediaUrls].slice(-200)));
+            }
+            element.classList.add('expired');
+            element.removeAttribute('href');
+            element.removeAttribute('target');
+        }
+
+        async function openDocumentMedia(event, element) {
+            const href = element.getAttribute('href');
+            const mediaUrl = element.dataset.mediaUrl || '';
+            const proxyUrl = element.dataset.proxyUrl || '';
+            if (
+                !href
+                || element.classList.contains('expired')
+                || expiredMediaUrls.has(href)
+                || expiredMediaUrls.has(mediaUrl)
+                || expiredMediaUrls.has(proxyUrl)
+            ) {
+                event.preventDefault();
+                markMediaUnavailable(element, href || mediaUrl || proxyUrl);
+                return;
+            }
+
+            if (!API_BASE_URL) return;
+
+            event.preventDefault();
+            const previewWindow = window.open('about:blank', '_blank');
+            if (previewWindow) previewWindow.opener = null;
+
+            try {
+                const result = await fetch(href);
+                if (!result.ok) throw new Error('Document unavailable');
+
+                const blob = await result.blob();
+                const objectUrl = URL.createObjectURL(blob);
+                if (previewWindow) {
+                    previewWindow.location.href = objectUrl;
+                    setTimeout(() => URL.revokeObjectURL(objectUrl), 60000);
+                } else {
+                    window.location.href = objectUrl;
+                }
+            } catch (error) {
+                if (previewWindow) previewWindow.close();
+                markMediaUnavailable(element, href);
+            }
         }
 
         function formatTemplatePlaceholders(value) {
@@ -2447,11 +2547,15 @@
             if (audioMatch) {
                 const url = audioMatch[1];
                 const audioUrl = proxiedMediaUrl(url);
-                return `<div class="audio-card">
+                const isExpired = expiredMediaUrls.has(url) || expiredMediaUrls.has(audioUrl);
+                const expiredClass = isExpired ? ' expired' : '';
+                const audioSrc = isExpired ? '' : ` src="${escapeHtml(audioUrl)}"`;
+                return `<div class="audio-card${expiredClass}" data-media-url="${escapeHtml(url)}" data-proxy-url="${escapeHtml(audioUrl)}">
                     <div class="audio-icon">🎙️</div>
                     <div class="audio-content">
                         <div class="audio-title">Nota de voz</div>
-                        <audio controls preload="none" src="${escapeHtml(audioUrl)}"></audio>
+                        <div class="media-unavailable">Audio expirado</div>
+                        <audio controls preload="none"${audioSrc} onerror="markMediaUnavailable(this.closest('.audio-card'))"></audio>
                     </div>
                 </div>`;
             }
@@ -2464,12 +2568,15 @@
                 const remainingText = text.slice(documentMatch[0].length).trim();
                 const extension = (filename.split('.').pop() || 'DOC').slice(0, 4).toUpperCase();
                 const documentType = mimeType.split('/').pop() || mimeType || 'documento';
+                const expiredClass = expiredMediaUrls.has(url) || expiredMediaUrls.has(documentUrl) ? ' expired' : '';
+                const documentHref = expiredClass ? '' : ` href="${escapeHtml(documentUrl)}" target="_blank"`;
                 return `<div>
-                    <a class="document-card" href="${escapeHtml(documentUrl)}" target="_blank" rel="noopener noreferrer">
+                    <a class="document-card${expiredClass}"${documentHref} rel="noopener noreferrer" data-media-url="${escapeHtml(url)}" data-proxy-url="${escapeHtml(documentUrl)}" onclick="openDocumentMedia(event, this)">
                         <div class="document-icon">${escapeHtml(extension)}</div>
                         <div class="document-content">
                             <div class="document-title">${escapeHtml(filename)}</div>
                             <div class="document-meta">${escapeHtml(documentType)}</div>
+                            <div class="media-unavailable">Documento expirado</div>
                         </div>
                     </a>
                     ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
