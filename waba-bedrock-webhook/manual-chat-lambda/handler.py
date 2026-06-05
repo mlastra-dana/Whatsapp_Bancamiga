@@ -1,9 +1,11 @@
+import base64
 import json
 import logging
 import os
 import re
 import unicodedata
 import urllib.error
+import urllib.parse
 import urllib.request
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -23,6 +25,7 @@ STATE_TABLE_NAME = os.environ.get("STATE_TABLE_NAME", "chat-state")
 CONVERSATIONS_TABLE_NAME = os.environ.get("CONVERSATIONS_TABLE_NAME", "chat-logs")
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
+MAX_MEDIA_BYTES = int(os.environ.get("MAX_MEDIA_BYTES", str(10 * 1024 * 1024)))
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
 TEMPLATES_STATE_KEY = "__quick_templates__"
 CONTACT_KEY_PREFIX = "contact#"
@@ -53,6 +56,21 @@ def response(status_code: int, body: Any, content_type: str = "application/json"
             "Access-Control-Allow-Headers": "Content-Type,Authorization",
         },
         "body": payload,
+    }
+
+
+def binary_response(status_code: int, data: bytes, content_type: str) -> dict:
+    return {
+        "statusCode": status_code,
+        "headers": {
+            "Content-Type": content_type or "application/octet-stream",
+            "Access-Control-Allow-Origin": CORS_ORIGIN,
+            "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+            "Access-Control-Allow-Headers": "Content-Type,Authorization",
+            "Cache-Control": "private, max-age=300",
+        },
+        "isBase64Encoded": True,
+        "body": base64.b64encode(data).decode("ascii"),
     }
 
 
@@ -343,6 +361,57 @@ def save_agent_presence(event):
     }})
 
 
+def is_allowed_media_url(url):
+    try:
+        parsed = urllib.parse.urlparse(url)
+    except Exception:
+        return False
+
+    if parsed.scheme != "https":
+        return False
+
+    host = (parsed.hostname or "").lower()
+    return (
+        host == "lookaside.fbsbx.com"
+        or host.endswith(".lookaside.fbsbx.com")
+        or host == "lookaside.facebook.com"
+        or host.endswith(".lookaside.facebook.com")
+        or host == "scontent.whatsapp.net"
+        or host.endswith(".scontent.whatsapp.net")
+    )
+
+
+def proxy_media(event):
+    if not WHATSAPP_TOKEN:
+        return response(500, {"error": "WHATSAPP_TOKEN/WHATSAPP_ACCESS_TOKEN is not configured"})
+
+    params = event.get("queryStringParameters") or {}
+    media_url = str(params.get("url") or "").strip()
+
+    if not media_url:
+        return response(400, {"error": "url is required"})
+    if not is_allowed_media_url(media_url):
+        return response(400, {"error": "media url is not allowed"})
+
+    req = urllib.request.Request(media_url)
+    req.add_header("Authorization", f"Bearer {WHATSAPP_TOKEN}")
+
+    try:
+        with urllib.request.urlopen(req, timeout=20) as res:
+            content_type = res.headers.get("Content-Type") or "application/octet-stream"
+            data = res.read(MAX_MEDIA_BYTES + 1)
+            if len(data) > MAX_MEDIA_BYTES:
+                return response(413, {"error": "media is too large"})
+            return binary_response(200, data, content_type)
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("Media proxy failed status=%s body=%s", exc.code, error_body[:1000])
+        return response(exc.code, {"error": "media is not available"})
+    except Exception:
+        logger.exception("Media proxy failed")
+        return response(502, {"error": "media proxy failed"})
+
+
 def get_absence_bot(event):
     return response(200, get_absence_bot_config())
 
@@ -581,8 +650,8 @@ def enviar_whatsapp(telefono, mensaje):
         return json.loads(res.read().decode("utf-8") or "{}")
 
 
-def obtener_url_imagen(image_id):
-    url = f"https://graph.facebook.com/v19.0/{image_id}"
+def obtener_url_media(media_id):
+    url = f"https://graph.facebook.com/v19.0/{media_id}"
     req = urllib.request.Request(url)
     req.add_header("Authorization", f"Bearer {WHATSAPP_TOKEN}")
     response_body = urllib.request.urlopen(req, timeout=15).read().decode("utf-8")
@@ -637,9 +706,29 @@ def extraer_mensaje(msg):
 
     if msg_type == "image":
         image_id = msg.get("image", {}).get("id")
-        caption = msg.get("image", {}).get("caption")
-        image_url = obtener_url_imagen(image_id) if image_id else ""
-        return caption or f"[Imagen]: {image_url}", "image"
+        caption = str(msg.get("image", {}).get("caption") or "").strip()
+        image_url = obtener_url_media(image_id) if image_id else ""
+        message = f"[Imagen]: {image_url}"
+        if caption:
+            message = f"{message}\n{caption}"
+        return message, "image"
+
+    if msg_type == "audio":
+        audio_id = msg.get("audio", {}).get("id")
+        audio_url = obtener_url_media(audio_id) if audio_id else ""
+        return f"[Audio]: {audio_url}", "audio"
+
+    if msg_type == "document":
+        document = msg.get("document", {})
+        document_id = document.get("id")
+        document_url = obtener_url_media(document_id) if document_id else ""
+        filename = str(document.get("filename") or "documento").replace("|", "-").strip()
+        mime_type = str(document.get("mime_type") or "application/octet-stream").replace("|", "-").strip()
+        caption = str(document.get("caption") or "").strip()
+        message = f"[Documento]: {filename} | {mime_type} | {document_url}"
+        if caption:
+            message = f"{message}\n{caption}"
+        return message, "document"
 
     if msg_type == "location":
         location = msg.get("location", {})
@@ -882,6 +971,8 @@ def lambda_handler(event, context):
             return handle_verification(event)
         if method == "GET" and path == "/conversations":
             return list_conversations(event)
+        if method == "GET" and path == "/media":
+            return proxy_media(event)
         if method == "POST" and path == "/send-message":
             return send_message_from_panel(event)
         if method == "GET" and path == "/contacts":
