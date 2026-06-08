@@ -139,6 +139,8 @@ Los placeholders como `{{1}}` se reemplazan por `NombreCliente` para que el hist
 | `GET` | `/conversations` | Lista conversaciones. |
 | `GET` | `/conversations?phone=...` | Lista mensajes de un telefono. |
 | `POST` | `/send-message` | Envia respuesta manual desde el panel. |
+| `POST` | `/calls/connect` | Inicia llamada saliente WhatsApp con SDP offer generado por el navegador. |
+| `POST` | `/calls/terminate` | Termina una llamada WhatsApp activa por `call_id`. |
 | `GET` | `/media?url=...` | Proxy temporal de media Meta. |
 | `GET` | `/contacts` | Lista contactos guardados. |
 | `POST` | `/contacts` | Crea/actualiza contacto. |
@@ -276,6 +278,63 @@ Un asesor se considera conectado si:
 - y `last_seen` tiene menos de 90 segundos.
 
 Al hacer click en `Salir`, el panel envia `online=false`.
+
+## Llamadas por WhatsApp
+
+Esta version incorpora una primera integracion para llamadas reales usando WhatsApp Calling API.
+
+### Flujo de llamada saliente
+
+1. El asesor hace click en `Llamar` dentro del chat.
+2. El navegador solicita permiso de microfono.
+3. El panel crea una conexion `RTCPeerConnection`.
+4. El panel genera un `SDP offer`.
+5. El panel llama:
+
+```http
+POST /calls/connect
+```
+
+con:
+
+```json
+{
+  "phone": "584120000000",
+  "sdp": "v=0...",
+  "agent_username": "mlastra",
+  "agent_name": "Maria Lastra"
+}
+```
+
+6. El Lambda llama a Meta en:
+
+```http
+POST /{PHONE_NUMBER_ID}/calls
+```
+
+con `action=connect` y la sesion SDP.
+7. Si Meta devuelve un `SDP answer`, el panel lo aplica en WebRTC.
+8. El evento se guarda en `chat-logs` como `msg_type=call`.
+
+### Terminar llamada
+
+El panel llama:
+
+```http
+POST /calls/terminate
+```
+
+con el `call_id` devuelto por Meta. El Lambda envia `action=terminate` a Meta y registra el evento en el historial.
+
+### Eventos inbound de llamada
+
+El webhook de WhatsApp ahora revisa `value.calls`. Si Meta envia eventos de llamadas, el Lambda los guarda en `chat-logs` como `msg_type=call` para que aparezcan en el historial.
+
+### Nota tecnica
+
+La llamada real no usa WhatsApp Web. El audio sale del navegador del asesor por WebRTC usando el numero corporativo conectado a WhatsApp Cloud API.
+
+El punto mas sensible es el formato exacto del `SDP answer` y los eventos que Meta entregue en respuesta a `action=connect`. La extraccion en frontend y backend esta hecha de forma flexible para aceptar respuestas anidadas, pero puede requerir ajuste fino con la respuesta real de Meta en pruebas.
 
 ## Bot de ausencia
 

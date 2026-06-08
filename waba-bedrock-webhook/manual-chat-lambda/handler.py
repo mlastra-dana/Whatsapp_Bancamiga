@@ -444,6 +444,302 @@ def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_usernam
     conversations_table.put_item(Item=item)
 
 
+def guardar_evento_llamada(telefono, descripcion, direccion="salida", call_id="", agent_username="", agent_name="", payload=None):
+    if conversations_table is None:
+        logger.warning("CONVERSATIONS_TABLE_NAME is not configured; call event was not logged")
+        return
+
+    tipo = "entrada" if direccion in {"entrada", "inbound"} else "salida"
+    item = {
+        "telefono": telefono,
+        "timestamp": now_iso(),
+        "mensaje": str(descripcion or "[Llamada]")[:1000],
+        "tipo": tipo,
+        "canal": "whatsapp",
+        "msg_type": "call",
+    }
+    if call_id:
+        item["call_id"] = str(call_id)[:160]
+    if agent_username:
+        item["agent_username"] = str(agent_username)[:80]
+    if agent_name:
+        item["agent_name"] = str(agent_name)[:160]
+    if payload is not None:
+        item["call_payload"] = payload
+    conversations_table.put_item(Item=item)
+
+
+def call_meta_api(payload):
+    if not WHATSAPP_TOKEN or not PHONE_NUMBER_ID:
+        raise RuntimeError("Missing WHATSAPP_TOKEN/PHONE_NUMBER_ID environment variables")
+
+    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{PHONE_NUMBER_ID}/calls"
+    req = urllib.request.Request(url, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Authorization", f"Bearer {WHATSAPP_TOKEN}")
+
+    with urllib.request.urlopen(req, data=json.dumps(payload).encode("utf-8"), timeout=20) as res:
+        return json.loads(res.read().decode("utf-8") or "{}")
+
+
+def call_meta_get(path, params=None):
+    if not WHATSAPP_TOKEN:
+        raise RuntimeError("Missing WHATSAPP_TOKEN environment variable")
+
+    query = urllib.parse.urlencode(params or {})
+    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{path.lstrip('/')}"
+    if query:
+        url = f"{url}?{query}"
+
+    req = urllib.request.Request(url)
+    req.add_header("Authorization", f"Bearer {WHATSAPP_TOKEN}")
+
+    with urllib.request.urlopen(req, timeout=20) as res:
+        return json.loads(res.read().decode("utf-8") or "{}")
+
+
+def send_whatsapp_payload(payload):
+    if not WHATSAPP_TOKEN or not PHONE_NUMBER_ID:
+        raise RuntimeError("Missing WHATSAPP_TOKEN/PHONE_NUMBER_ID environment variables")
+
+    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{PHONE_NUMBER_ID}/messages"
+    req = urllib.request.Request(url, method="POST")
+    req.add_header("Content-Type", "application/json")
+    req.add_header("Authorization", f"Bearer {WHATSAPP_TOKEN}")
+
+    with urllib.request.urlopen(req, data=json.dumps(payload).encode("utf-8"), timeout=20) as res:
+        return json.loads(res.read().decode("utf-8") or "{}")
+
+
+def extract_call_id(value):
+    if isinstance(value, dict):
+        for key in ("id", "call_id", "callId"):
+            if value.get(key):
+                return str(value[key])
+        for nested in value.values():
+            found = extract_call_id(nested)
+            if found:
+                return found
+    if isinstance(value, list):
+        for item in value:
+            found = extract_call_id(item)
+            if found:
+                return found
+    return ""
+
+
+def can_start_business_call(permission_response):
+    candidates = []
+    if isinstance(permission_response, dict):
+        candidates.append(permission_response)
+        data = permission_response.get("data")
+        if isinstance(data, list):
+            candidates.extend(item for item in data if isinstance(item, dict))
+
+    for item in candidates:
+        status = normalize_text(item.get("status") or item.get("call_permission_status") or item.get("permission_status"))
+        if status in {"granted", "allowed", "active", "permanent", "temporary"}:
+            return True
+        actions = item.get("actions") or item.get("available_actions") or {}
+        if isinstance(actions, dict):
+            for key in ("start_call", "connect", "call"):
+                action = actions.get(key)
+                if isinstance(action, dict) and bool(action.get("can_perform_action", False)):
+                    return True
+                if action is True:
+                    return True
+        for key in ("can_call", "can_start_call", "start_call", "is_call_allowed"):
+            if item.get(key) is True:
+                return True
+    return False
+
+
+def request_call_permission_message(telefono):
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": telefono,
+        "type": "interactive",
+        "interactive": {
+            "type": "call_permission_request",
+            "body": {
+                "text": "Para llamarte desde este canal, necesitamos tu permiso. Puedes aceptarlo directamente en WhatsApp.",
+            },
+            "action": {
+                "name": "call_permission_request",
+            },
+        },
+    }
+    return send_whatsapp_payload(payload)
+
+
+def request_whatsapp_call_permission(event):
+    body = parse_body(event)
+    telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
+    agent_username = str(body.get("agent_username") or "").strip()
+    agent_name = str(body.get("agent_name") or agent_username or "").strip()
+
+    if not telefono:
+        return response(400, {"error": "phone is required"})
+
+    permission_response = {}
+    try:
+        permission_response = call_meta_get(f"{PHONE_NUMBER_ID}/call_permissions", {"user_wa_id": telefono})
+        if can_start_business_call(permission_response):
+            return response(200, {
+                "success": True,
+                "can_call": True,
+                "permission": permission_response,
+            })
+
+        request_result = request_call_permission_message(telefono)
+        guardar_evento_llamada(
+            telefono,
+            "[Llamada]: solicitud de permiso para llamar enviada",
+            "salida",
+            "",
+            agent_username,
+            agent_name,
+            {"permission": permission_response, "request_result": request_result},
+        )
+        return response(200, {
+            "success": True,
+            "can_call": False,
+            "permission_requested": True,
+            "permission": permission_response,
+            "result": request_result,
+        })
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("WhatsApp call permission failed status=%s body=%s", exc.code, error_body[:5000])
+        return response(exc.code, {"error": error_body, "permission": permission_response})
+
+
+def connect_whatsapp_call(event):
+    body = parse_body(event)
+    telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
+    sdp = str(body.get("sdp") or "").strip()
+    agent_username = str(body.get("agent_username") or "").strip()
+    agent_name = str(body.get("agent_name") or agent_username or "").strip()
+
+    if not telefono or not sdp:
+        return response(400, {"error": "phone and sdp are required"})
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": telefono,
+        "action": "connect",
+        "session": {
+            "sdp_type": "offer",
+            "sdp": sdp,
+        },
+    }
+
+    try:
+        result = call_meta_api(payload)
+        call_id = extract_call_id(result)
+        guardar_evento_llamada(
+            telefono,
+            "[Llamada]: llamada saliente iniciada desde el panel",
+            "salida",
+            call_id,
+            agent_username,
+            agent_name,
+            {"request": payload, "response": result},
+        )
+        return response(200, {"success": True, "result": result, "call_id": call_id})
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("WhatsApp call connect failed status=%s body=%s", exc.code, error_body[:5000])
+        guardar_evento_llamada(
+            telefono,
+            "[Llamada]: no se pudo iniciar la llamada desde el panel",
+            "salida",
+            "",
+            agent_username,
+            agent_name,
+            {"error": error_body},
+        )
+        return response(exc.code, {"error": error_body})
+
+
+def terminate_whatsapp_call(event):
+    body = parse_body(event)
+    telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
+    call_id = str(body.get("call_id") or body.get("id") or "").strip()
+    agent_username = str(body.get("agent_username") or "").strip()
+    agent_name = str(body.get("agent_name") or agent_username or "").strip()
+
+    if not call_id:
+        return response(400, {"error": "call_id is required"})
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "call_id": call_id,
+        "action": "terminate",
+    }
+
+    try:
+        result = call_meta_api(payload)
+        if telefono:
+            guardar_evento_llamada(
+                telefono,
+                "[Llamada]: llamada finalizada desde el panel",
+                "salida",
+                call_id,
+                agent_username,
+                agent_name,
+                {"request": payload, "response": result},
+            )
+        return response(200, {"success": True, "result": result})
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("WhatsApp call terminate failed status=%s body=%s", exc.code, error_body[:5000])
+        return response(exc.code, {"error": error_body})
+
+
+def accept_whatsapp_call(event):
+    body = parse_body(event)
+    telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
+    call_id = str(body.get("call_id") or body.get("id") or "").strip()
+    sdp = str(body.get("sdp") or "").strip()
+    action = str(body.get("action") or "accept").strip().lower()
+    agent_username = str(body.get("agent_username") or "").strip()
+    agent_name = str(body.get("agent_name") or agent_username or "").strip()
+
+    if action not in {"pre_accept", "accept"}:
+        return response(400, {"error": "action must be pre_accept or accept"})
+    if not call_id or not sdp:
+        return response(400, {"error": "call_id and sdp are required"})
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "call_id": call_id,
+        "action": action,
+        "session": {
+            "sdp_type": "answer",
+            "sdp": sdp,
+        },
+    }
+
+    try:
+        result = call_meta_api(payload)
+        if telefono and action == "accept":
+            guardar_evento_llamada(
+                telefono,
+                "[Llamada]: llamada contestada desde el panel",
+                "salida",
+                call_id,
+                agent_username,
+                agent_name,
+                {"request": payload, "response": result},
+            )
+        return response(200, {"success": True, "result": result, "call_id": call_id})
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("WhatsApp call accept failed status=%s body=%s", exc.code, error_body[:5000])
+        return response(exc.code, {"error": error_body})
+
+
 def mark_conversation_attended(telefono):
     if conversations_table is None:
         return
@@ -645,6 +941,8 @@ def normalizar_log_para_panel(item):
         "canal": item.get("canal", "whatsapp"),
         "agent_username": item.get("agent_username") or "",
         "agent_name": item.get("agent_name") or "",
+        "call_id": item.get("call_id") or "",
+        "call_payload": item.get("call_payload") or {},
     }
 
 
@@ -822,10 +1120,57 @@ def send_message_from_panel(event):
         return response(exc.code, {"error": error_body})
 
 
+def describe_call_event(call):
+    status = call.get("status") or call.get("event") or call.get("action") or "evento"
+    direction = call.get("direction") or ""
+    duration = call.get("duration") or call.get("duration_seconds") or ""
+    parts = [f"[Llamada]: {status}"]
+    if direction:
+        parts.append(str(direction))
+    if duration:
+        parts.append(f"{duration}s")
+    return " · ".join(parts)
+
+
+def handle_call_webhook(value):
+    calls = value.get("calls") if isinstance(value, dict) else None
+    if not isinstance(calls, list) or not calls:
+        return False
+
+    contacts = value.get("contacts") if isinstance(value.get("contacts"), list) else []
+    fallback_phone = ""
+    if contacts:
+        fallback_phone = normalize_phone(contacts[0].get("wa_id") or contacts[0].get("input"))
+
+    for call in calls:
+        if not isinstance(call, dict):
+            continue
+        telefono = normalize_phone(
+            call.get("from")
+            or call.get("to")
+            or call.get("wa_id")
+            or fallback_phone
+        )
+        if not telefono:
+            continue
+        direction = "entrada" if call.get("from") else "salida"
+        guardar_evento_llamada(
+            telefono,
+            describe_call_event(call),
+            direction,
+            str(call.get("id") or call.get("call_id") or ""),
+            payload=call,
+        )
+    return True
+
+
 def handle_whatsapp_webhook(event):
     try:
         body = parse_body(event)
         value = body["entry"][0]["changes"][0]["value"]
+        if handle_call_webhook(value):
+            return response(200, {"success": True, "mode": "calls"})
+
         messages = value.get("messages")
         if not messages:
             return response(200, {"success": True})
@@ -993,6 +1338,14 @@ def lambda_handler(event, context):
             return proxy_media(event)
         if method == "POST" and path == "/send-message":
             return send_message_from_panel(event)
+        if method == "POST" and path == "/calls/connect":
+            return connect_whatsapp_call(event)
+        if method == "POST" and path == "/calls/request-permission":
+            return request_whatsapp_call_permission(event)
+        if method == "POST" and path == "/calls/accept":
+            return accept_whatsapp_call(event)
+        if method == "POST" and path == "/calls/terminate":
+            return terminate_whatsapp_call(event)
         if method == "GET" and path == "/contacts":
             return list_contacts(event)
         if method == "POST" and path == "/contacts":

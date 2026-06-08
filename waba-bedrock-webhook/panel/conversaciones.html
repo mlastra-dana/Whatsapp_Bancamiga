@@ -374,6 +374,17 @@
             padding: 0 14px;
         }
 
+        .call-btn {
+            background: #f2fff8;
+            border-color: rgba(24, 160, 88, 0.28);
+            color: var(--success);
+        }
+
+        .call-btn:hover {
+            background: #e8fff3;
+            border-color: rgba(24, 160, 88, 0.42);
+        }
+
         .search-input {
             width: auto;
             flex: 1;
@@ -932,6 +943,27 @@
             font-size: 12px;
         }
 
+        .call-card {
+            display: inline-grid;
+            gap: 3px;
+            min-width: 220px;
+            padding: 10px;
+            border: 1px solid rgba(24, 160, 88, 0.16);
+            border-radius: 8px;
+            background: #f4fff9;
+            color: var(--navy);
+        }
+
+        .call-card strong {
+            font-size: 13px;
+            color: var(--success);
+        }
+
+        .call-card span {
+            font-size: 12px;
+            color: var(--muted);
+        }
+
         .empty-state {
             display: flex;
             align-items: center;
@@ -1095,6 +1127,36 @@
             line-height: 1.35;
         }
 
+        .call-status-card {
+            display: grid;
+            gap: 8px;
+            padding: 14px;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface-muted);
+        }
+
+        .call-status-card strong {
+            color: var(--navy);
+            font-size: 16px;
+        }
+
+        .call-status-card span {
+            color: var(--muted);
+            font-size: 13px;
+            line-height: 1.4;
+        }
+
+        .call-status-live {
+            color: var(--success);
+            font-weight: 800;
+        }
+
+        .call-status-error {
+            color: var(--danger);
+            font-weight: 800;
+        }
+
         .switch {
             position: relative;
             width: 48px;
@@ -1249,7 +1311,10 @@
                             <span class="chat-title" id="chat-header"></span>
                             <span class="chat-subtitle" id="chat-subtitle"></span>
                         </div>
-                        <button class="secondary-btn" id="edit-contact-btn" onclick="openContactModal()" style="display:none;">Guardar contacto</button>
+                        <div class="row-actions">
+                            <button class="secondary-btn call-btn" id="call-contact-btn" onclick="startWhatsAppCall()" style="display:none;">Llamar</button>
+                            <button class="secondary-btn" id="edit-contact-btn" onclick="openContactModal()" style="display:none;">Guardar contacto</button>
+                        </div>
                     </div>
                     <div class="chat-messages" id="chat-messages">
                         <div class="empty-state"></div>
@@ -1353,11 +1418,34 @@
         </form>
     </div>
 
+    <div class="modal-backdrop" id="call-modal" aria-hidden="true">
+        <div class="modal">
+            <div class="modal-header">
+                <h2>Llamada por WhatsApp</h2>
+            </div>
+            <div class="modal-body">
+                <div class="call-status-card">
+                    <strong id="call-modal-title">Preparando llamada</strong>
+                    <span id="call-modal-subtitle">El navegador pedirá acceso al micrófono.</span>
+                    <span id="call-modal-status"></span>
+                </div>
+            </div>
+            <div class="modal-actions">
+                <button class="secondary-btn" type="button" onclick="closeCallModal()">Cerrar</button>
+                <button class="danger-btn" type="button" id="call-end-btn" onclick="endWhatsAppCall()" disabled>Colgar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="config.js"></script>
     <script>
         const API_BASE_URL = (window.CHATTLOGGER_API_URL || '').replace(/\/$/, '');
         const API_URL = API_BASE_URL ? `${API_BASE_URL}/conversations` : '';
         const SEND_API_URL = API_BASE_URL ? `${API_BASE_URL}/send-message` : '';
+        const CALL_CONNECT_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/connect` : '';
+        const CALL_PERMISSION_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/request-permission` : '';
+        const CALL_ACCEPT_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/accept` : '';
+        const CALL_TERMINATE_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/terminate` : '';
         const ABSENCE_BOT_URL = API_BASE_URL ? `${API_BASE_URL}/absence-bot` : '';
         const CONTACTS_DIRECTORY_URL = 'contacts.json';
         const CONTACTS_API_URL = API_BASE_URL ? `${API_BASE_URL}/contacts` : '';
@@ -1373,6 +1461,7 @@
         const TEMPLATES_STORAGE_KEY = 'chattlogger.templates.v1';
         const EXPIRED_MEDIA_STORAGE_KEY = 'chattlogger.expiredMedia.v1';
         const REFRESH_INTERVAL_MS = 2000;
+        const READ_STATE_REFRESH_MS = 10000;
         const AGENT_HEARTBEAT_MS = 15000;
         const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
         const DEMO_AGENTS = {
@@ -1414,6 +1503,9 @@
         let notificationAudioContext = null;
         let panelStarted = false;
         let refreshTimer = null;
+        let conversationsLoading = false;
+        let conversationsReloadQueued = false;
+        let lastBackendReadStateLoad = 0;
         let presenceTimer = null;
         let inactivityTimer = null;
         let selectedContactRenderKey = '';
@@ -1422,6 +1514,10 @@
         let quickTemplates = [];
         let editingTemplateIndex = null;
         let expiredMediaUrls = new Set(loadExpiredMediaUrls());
+        let activeCall = null;
+        let incomingCallRingtoneTimer = null;
+        let incomingCallRingtoneStopTimer = null;
+        let lastRingingCallKey = '';
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
@@ -1503,7 +1599,7 @@
 
             if (!panelStarted) {
                 panelStarted = true;
-                Promise.all([loadContactsDirectory(), loadBackendReadState()]).then(() => loadConversations());
+                Promise.all([loadContactsDirectory(), loadBackendReadStateIfDue(true)]).then(() => loadConversations());
                 refreshTimer = setInterval(loadConversations, REFRESH_INTERVAL_MS);
                 sendAgentPresence();
                 presenceTimer = setInterval(sendAgentPresence, AGENT_HEARTBEAT_MS);
@@ -1768,6 +1864,465 @@
 
         function formatTemplatePlaceholders(value) {
             return String(value || '').replace(/\{\{\s*\d+\s*\}\}/g, 'NombreCliente');
+        }
+
+        function setCallStatus(title, subtitle = '', status = '', mode = '') {
+            document.getElementById('call-modal-title').textContent = title;
+            document.getElementById('call-modal-subtitle').textContent = subtitle;
+            const statusEl = document.getElementById('call-modal-status');
+            statusEl.textContent = status;
+            statusEl.className = mode === 'error'
+                ? 'call-status-error'
+                : mode === 'live'
+                    ? 'call-status-live'
+                    : '';
+        }
+
+        function openCallModal() {
+            const modal = document.getElementById('call-modal');
+            modal.classList.add('open');
+            modal.setAttribute('aria-hidden', 'false');
+        }
+
+        function closeCallModal() {
+            const modal = document.getElementById('call-modal');
+            modal.classList.remove('open');
+            modal.setAttribute('aria-hidden', 'true');
+        }
+
+        function extractSdpAnswer(value) {
+            if (!value) return '';
+            if (typeof value === 'string') return value.includes('v=0') ? value : '';
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    const found = extractSdpAnswer(item);
+                    if (found) return found;
+                }
+                return '';
+            }
+            if (typeof value === 'object') {
+                const sdpType = String(value.sdp_type || value.type || '').toLowerCase();
+                if (value.sdp && (!sdpType || sdpType === 'answer')) return String(value.sdp);
+                for (const nested of Object.values(value)) {
+                    const found = extractSdpAnswer(nested);
+                    if (found) return found;
+                }
+            }
+            return '';
+        }
+
+        function extractSdpOffer(value) {
+            if (!value) return '';
+            if (typeof value === 'string') return value.includes('v=0') ? value : '';
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    const found = extractSdpOffer(item);
+                    if (found) return found;
+                }
+                return '';
+            }
+            if (typeof value === 'object') {
+                const sdpType = String(value.sdp_type || value.type || '').toLowerCase();
+                if (value.sdp && (!sdpType || sdpType === 'offer')) return String(value.sdp);
+                for (const nested of Object.values(value)) {
+                    const found = extractSdpOffer(nested);
+                    if (found) return found;
+                }
+            }
+            return '';
+        }
+
+        function extractCallId(value) {
+            if (!value) return '';
+            if (Array.isArray(value)) {
+                for (const item of value) {
+                    const found = extractCallId(item);
+                    if (found) return found;
+                }
+                return '';
+            }
+            if (typeof value === 'object') {
+                for (const key of ['call_id', 'callId', 'id']) {
+                    if (value[key]) return String(value[key]);
+                }
+                for (const nested of Object.values(value)) {
+                    const found = extractCallId(nested);
+                    if (found) return found;
+                }
+            }
+            return '';
+        }
+
+        async function waitForIceGathering(peerConnection) {
+            if (peerConnection.iceGatheringState === 'complete') return;
+            await new Promise(resolve => {
+                const timeout = setTimeout(resolve, 2500);
+                peerConnection.addEventListener('icegatheringstatechange', () => {
+                    if (peerConnection.iceGatheringState === 'complete') {
+                        clearTimeout(timeout);
+                        resolve();
+                    }
+                });
+            });
+        }
+
+        function extractMetaErrorText(value) {
+            if (!value) return '';
+            if (typeof value === 'object') {
+                return value.error_user_msg || value.message || value.detail || JSON.stringify(value);
+            }
+
+            const text = String(value);
+            try {
+                const parsed = JSON.parse(text);
+                if (parsed?.error) return extractMetaErrorText(parsed.error);
+                return extractMetaErrorText(parsed);
+            } catch {
+                return text;
+            }
+        }
+
+        function friendlyCallError(value) {
+            const text = extractMetaErrorText(value);
+            if (
+                text.includes('Business-initiated calling is not available') ||
+                text.includes('Business initiated calls not available') ||
+                text.includes('Las llamadas iniciadas por el negocio no están disponibles')
+            ) {
+                return 'Meta indica que las llamadas salientes iniciadas por el negocio no están disponibles para esta cuenta. El panel sí llegó a solicitar la llamada, pero Meta la bloqueó para este WABA/número.';
+            }
+            return text || 'No se pudo iniciar la llamada.';
+        }
+
+        function isAnswerableCall(message) {
+            const detail = String(message.message || '');
+            const payload = message.call_payload || {};
+            const callId = message.call_id || extractCallId(payload);
+            const offerSdp = extractSdpOffer(payload);
+            return (
+                message.direction === 'inbound' &&
+                callId &&
+                offerSdp &&
+                /\[Llamada\]:\s*connect/i.test(detail) &&
+                !/completed|terminate|reject/i.test(detail)
+            );
+        }
+
+        function createCallPeerConnection(onRemoteAudio) {
+            const peerConnection = new RTCPeerConnection({
+                iceServers: [{ urls: 'stun:stun.l.google.com:19302' }],
+            });
+            const remoteStream = new MediaStream();
+            const remoteAudio = new Audio();
+            remoteAudio.autoplay = true;
+            remoteAudio.playsInline = true;
+            remoteAudio.srcObject = remoteStream;
+
+            peerConnection.addEventListener('track', event => {
+                event.streams?.[0]?.getTracks().forEach(track => remoteStream.addTrack(track));
+                if (!event.streams?.length && event.track) remoteStream.addTrack(event.track);
+                remoteAudio.play().catch(() => {});
+                onRemoteAudio?.(remoteAudio, remoteStream);
+            });
+
+            return { peerConnection, remoteAudio, remoteStream };
+        }
+
+        async function ensureBusinessCallPermission(phone) {
+            if (!CALL_PERMISSION_API_URL) return { can_call: true };
+
+            setCallStatus('Validando permiso', `Revisando si podemos llamar a ${getContactName(phone) || phone}`, 'Consultando permisos de WhatsApp...');
+            const response = await fetch(CALL_PERMISSION_API_URL, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phone,
+                    agent_username: currentAgent.username,
+                    agent_name: currentAgent.name,
+                }),
+            });
+            const data = await response.json().catch(() => ({}));
+            if (!response.ok) throw new Error(friendlyCallError(data.error || data));
+            return data;
+        }
+
+        async function startWhatsAppCall() {
+            if (!selectedPhone || !currentAgent) return;
+            if (!CALL_CONNECT_API_URL) {
+                openCallModal();
+                setCallStatus('No configurado', 'Falta configurar la URL del Lambda.', '', 'error');
+                return;
+            }
+
+            openCallModal();
+            document.getElementById('call-end-btn').disabled = true;
+            setCallStatus('Preparando llamada', `Llamando a ${getContactName(selectedPhone) || selectedPhone}`, 'Validando permiso de llamada...');
+
+            try {
+                const permission = await ensureBusinessCallPermission(selectedPhone);
+                if (!permission.can_call) {
+                    if (permission.permission_requested) {
+                        setCallStatus(
+                            'Solicitud enviada',
+                            `Enviamos una solicitud de permiso a ${getContactName(selectedPhone) || selectedPhone}.`,
+                            'Cuando el cliente acepte en WhatsApp, intenta llamar nuevamente desde el panel.',
+                            'live'
+                        );
+                    } else {
+                        setCallStatus(
+                            'Permiso requerido',
+                            'El cliente aún no ha autorizado llamadas salientes del negocio.',
+                            'No se inició la llamada.',
+                            'error'
+                        );
+                    }
+                    return;
+                }
+
+                setCallStatus('Preparando llamada', `Llamando a ${getContactName(selectedPhone) || selectedPhone}`, 'Solicitando permiso de micrófono...');
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                const callMedia = createCallPeerConnection(() => {
+                    setCallStatus('Llamada activa', `Conectado con ${getContactName(selectedPhone) || selectedPhone}`, 'Audio conectado.', 'live');
+                });
+                const { peerConnection, remoteAudio } = callMedia;
+                stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+                peerConnection.addEventListener('connectionstatechange', () => {
+                    if (!activeCall || activeCall.peerConnection !== peerConnection) return;
+                    const state = peerConnection.connectionState;
+                    if (state === 'connected') {
+                        setCallStatus('Llamada activa', `Conectado con ${getContactName(selectedPhone) || selectedPhone}`, 'Audio conectado.', 'live');
+                    } else if (['failed', 'disconnected', 'closed'].includes(state)) {
+                        setCallStatus('Llamada finalizada', 'La conexión de audio terminó.', state);
+                    }
+                });
+                peerConnection.addEventListener('iceconnectionstatechange', () => {
+                    if (!activeCall || activeCall.peerConnection !== peerConnection) return;
+                    const state = peerConnection.iceConnectionState;
+                    if (['failed', 'disconnected'].includes(state)) {
+                        setCallStatus('Llamada sin audio', 'La llamada fue aceptada, pero WebRTC no pudo conectar el audio.', state, 'error');
+                    }
+                });
+
+                setCallStatus('Conectando', 'Generando sesión de audio segura...', 'Creando oferta SDP...');
+                const offer = await peerConnection.createOffer({ offerToReceiveAudio: true });
+                await peerConnection.setLocalDescription(offer);
+                await waitForIceGathering(peerConnection);
+
+                const localSdp = peerConnection.localDescription?.sdp || offer.sdp;
+                activeCall = {
+                    phone: selectedPhone,
+                    peerConnection,
+                    stream,
+                    remoteAudio,
+                    callId: '',
+                };
+
+                setCallStatus('Llamando', `Llamando a ${getContactName(selectedPhone) || selectedPhone}`, 'Enviando oferta a WhatsApp...');
+                const response = await fetch(CALL_CONNECT_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phone: selectedPhone,
+                        sdp: localSdp,
+                        agent_username: currentAgent.username,
+                        agent_name: currentAgent.name,
+                    }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(friendlyCallError(data.error || data));
+
+                activeCall.callId = data.call_id || extractCallId(data);
+                document.getElementById('call-end-btn').disabled = !activeCall.callId;
+
+                const answerSdp = extractSdpAnswer(data);
+                if (answerSdp) {
+                    await peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                    setCallStatus('Llamada activa', `Conectando con ${getContactName(selectedPhone) || selectedPhone}`, 'Esperando audio...', 'live');
+                } else {
+                    setCallStatus('Llamada enviada', `WhatsApp recibió la solicitud para ${getContactName(selectedPhone) || selectedPhone}`, 'Esperando respuesta de Meta.');
+                }
+
+                allMessages.push({
+                    phone_number: selectedPhone,
+                    timestamp: new Date().toISOString(),
+                    direction: 'outbound',
+                    message: '[Llamada]: llamada saliente iniciada desde el panel',
+                    msg_type: 'call',
+                    agent_username: currentAgent.username,
+                    agent_name: currentAgent.name,
+                });
+                processMessages();
+                renderContacts();
+                renderSelectedContact({ forceScrollBottom: true });
+            } catch (error) {
+                cleanupActiveCall();
+                setCallStatus(
+                    'No se pudo iniciar la llamada',
+                    'La solicitud llegó a Meta, pero fue rechazada por configuración o disponibilidad de llamadas.',
+                    friendlyCallError(error.message),
+                    'error'
+                );
+            }
+        }
+
+        async function acceptIncomingCall(phone, callId, encodedPayload) {
+            if (!currentAgent) return;
+            stopIncomingCallRingtone();
+            if (!CALL_ACCEPT_API_URL) {
+                openCallModal();
+                setCallStatus('No configurado', 'Falta configurar la URL del Lambda.', '', 'error');
+                return;
+            }
+
+            let payload = {};
+            try {
+                payload = JSON.parse(decodeURIComponent(encodedPayload || '{}'));
+            } catch {
+                payload = {};
+            }
+
+            const offerSdp = extractSdpOffer(payload);
+            if (!phone || !callId || !offerSdp) {
+                openCallModal();
+                setCallStatus(
+                    'No se puede contestar',
+                    'Meta no envió una oferta SDP activa para esta llamada.',
+                    'Es posible que el evento recibido sea solo historial o que la llamada ya haya terminado.',
+                    'error'
+                );
+                return;
+            }
+
+            openCallModal();
+            document.getElementById('call-end-btn').disabled = true;
+                setCallStatus('Contestando llamada', `Conectando con ${getContactName(phone) || phone}`, 'Solicitando permiso de micrófono...');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true, video: false });
+                const callMedia = createCallPeerConnection(() => {
+                    setCallStatus('Llamada activa', `Conectado con ${getContactName(phone) || phone}`, 'Audio conectado.', 'live');
+                });
+                const { peerConnection, remoteAudio } = callMedia;
+                stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
+                peerConnection.addEventListener('connectionstatechange', () => {
+                    if (!activeCall || activeCall.peerConnection !== peerConnection) return;
+                    const state = peerConnection.connectionState;
+                    if (state === 'connected') {
+                        setCallStatus('Llamada activa', `Conectado con ${getContactName(phone) || phone}`, 'Audio conectado.', 'live');
+                    } else if (['failed', 'disconnected', 'closed'].includes(state)) {
+                        setCallStatus('Llamada finalizada', 'La conexión de audio terminó.', state);
+                    }
+                });
+                peerConnection.addEventListener('iceconnectionstatechange', () => {
+                    if (!activeCall || activeCall.peerConnection !== peerConnection) return;
+                    const state = peerConnection.iceConnectionState;
+                    if (['failed', 'disconnected'].includes(state)) {
+                        setCallStatus('Llamada sin audio', 'La llamada fue aceptada, pero WebRTC no pudo conectar el audio.', state, 'error');
+                    }
+                });
+
+                setCallStatus('Contestando llamada', 'Generando respuesta de audio...', 'Procesando oferta SDP...');
+                await peerConnection.setRemoteDescription({ type: 'offer', sdp: offerSdp });
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+                await waitForIceGathering(peerConnection);
+
+                const localSdp = peerConnection.localDescription?.sdp || answer.sdp;
+                activeCall = { phone, peerConnection, stream, remoteAudio, callId };
+
+                const sendCallAction = async action => {
+                    const response = await fetch(CALL_ACCEPT_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone,
+                            call_id: callId,
+                            sdp: localSdp,
+                            action,
+                            agent_username: currentAgent.username,
+                            agent_name: currentAgent.name,
+                        }),
+                    });
+                    const data = await response.json().catch(() => ({}));
+                    if (!response.ok) throw new Error(friendlyCallError(data.error || data));
+                    return data;
+                };
+
+                setCallStatus('Contestando llamada', `Aceptando llamada de ${getContactName(phone) || phone}`, 'Enviando respuesta previa a WhatsApp...');
+                await sendCallAction('pre_accept');
+
+                setCallStatus('Contestando llamada', `Aceptando llamada de ${getContactName(phone) || phone}`, 'Conectando audio...');
+                await sendCallAction('accept');
+
+                document.getElementById('call-end-btn').disabled = false;
+                setCallStatus('Llamada activa', `Conectando con ${getContactName(phone) || phone}`, 'Esperando audio...', 'live');
+                allMessages.push({
+                    phone_number: phone,
+                    timestamp: new Date().toISOString(),
+                    direction: 'outbound',
+                    message: '[Llamada]: llamada contestada desde el panel',
+                    msg_type: 'call',
+                    call_id: callId,
+                    agent_username: currentAgent.username,
+                    agent_name: currentAgent.name,
+                });
+                processMessages();
+                renderContacts();
+                renderSelectedContact({ forceScrollBottom: true });
+            } catch (error) {
+                cleanupActiveCall();
+                setCallStatus(
+                    'No se pudo contestar la llamada',
+                    'Meta rechazó la aceptación o la llamada ya no está activa.',
+                    friendlyCallError(error.message),
+                    'error'
+                );
+            }
+        }
+
+        function cleanupActiveCall() {
+            stopIncomingCallRingtone();
+            if (!activeCall) return;
+            activeCall.stream?.getTracks().forEach(track => track.stop());
+            if (activeCall.remoteAudio) {
+                activeCall.remoteAudio.pause();
+                activeCall.remoteAudio.srcObject = null;
+            }
+            activeCall.peerConnection?.close();
+            activeCall = null;
+            document.getElementById('call-end-btn').disabled = true;
+        }
+
+        async function endWhatsAppCall() {
+            if (!activeCall) {
+                closeCallModal();
+                return;
+            }
+
+            const callToEnd = activeCall;
+            setCallStatus('Finalizando llamada', `Cerrando llamada con ${getContactName(callToEnd.phone) || callToEnd.phone}`, '');
+            cleanupActiveCall();
+
+            if (CALL_TERMINATE_API_URL && callToEnd.callId) {
+                try {
+                    await fetch(CALL_TERMINATE_API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            phone: callToEnd.phone,
+                            call_id: callToEnd.callId,
+                            agent_username: currentAgent?.username || '',
+                            agent_name: currentAgent?.name || '',
+                        }),
+                    });
+                } catch (error) {
+                    console.warn('Could not terminate call in backend:', error);
+                }
+            }
+
+            setCallStatus('Llamada finalizada', 'La llamada fue cerrada desde el panel.', '', 'live');
         }
 
         function normalize(value) {
@@ -2124,11 +2679,64 @@
             } catch (error) {}
         }
 
+        function playIncomingCallSound() {
+            try {
+                const ctx = notificationAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+                notificationAudioContext = ctx;
+                if (ctx.state === 'suspended') ctx.resume();
+                const now = ctx.currentTime;
+                const notes = [
+                    { start: 0, freq: 440, duration: 0.32, gain: 0.16 },
+                    { start: 0.34, freq: 494, duration: 0.32, gain: 0.16 },
+                    { start: 0.78, freq: 440, duration: 0.32, gain: 0.16 },
+                    { start: 1.12, freq: 494, duration: 0.32, gain: 0.16 },
+                ];
+                notes.forEach(note => {
+                    const osc = ctx.createOscillator();
+                    const gain = ctx.createGain();
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(note.freq, now + note.start);
+                    gain.gain.setValueAtTime(0.0001, now + note.start);
+                    gain.gain.linearRampToValueAtTime(note.gain, now + note.start + 0.025);
+                    gain.gain.exponentialRampToValueAtTime(0.0001, now + note.start + note.duration);
+                    osc.connect(gain);
+                    gain.connect(ctx.destination);
+                    osc.start(now + note.start);
+                    osc.stop(now + note.start + note.duration + 0.02);
+                });
+            } catch (error) {}
+        }
+
+        function stopIncomingCallRingtone() {
+            if (incomingCallRingtoneTimer) clearInterval(incomingCallRingtoneTimer);
+            if (incomingCallRingtoneStopTimer) clearTimeout(incomingCallRingtoneStopTimer);
+            incomingCallRingtoneTimer = null;
+            incomingCallRingtoneStopTimer = null;
+            lastRingingCallKey = '';
+        }
+
+        function startIncomingCallRingtone(callKey) {
+            if (!callKey || lastRingingCallKey === callKey) return;
+            stopIncomingCallRingtone();
+            lastRingingCallKey = callKey;
+            playIncomingCallSound();
+            incomingCallRingtoneTimer = setInterval(playIncomingCallSound, 2600);
+            incomingCallRingtoneStopTimer = setTimeout(stopIncomingCallRingtone, 30000);
+        }
+
         function showBrowserNotification(phone, message) {
             if (!notificationsEnabled) return;
             const name = getContactName(phone) || phone;
             new Notification(`Nuevo mensaje - ${name}`, {
                 body: message.substring(0, 100),
+            });
+        }
+
+        function showIncomingCallNotification(phone) {
+            if (!notificationsEnabled) return;
+            const name = getContactName(phone) || phone;
+            new Notification(`Llamada entrante - ${name}`, {
+                body: 'Abre el panel para contestar por WhatsApp.',
             });
         }
 
@@ -2163,6 +2771,12 @@
             } catch (error) {
                 console.warn('No se pudo cargar estado de lectura:', error);
             }
+        }
+
+        async function loadBackendReadStateIfDue(force = false) {
+            if (!force && Date.now() - lastBackendReadStateLoad < READ_STATE_REFRESH_MS) return;
+            lastBackendReadStateLoad = Date.now();
+            await loadBackendReadState();
         }
 
         async function saveReadStateToBackend(phone, lastReadAt) {
@@ -2289,6 +2903,9 @@
                 .filter(message => message.direction === 'inbound')
                 .sort((a, b) => compareTimestamp(b.timestamp, a.timestamp))[0];
             if (!latestInbound || !latestInbound.timestamp) return;
+            if (readState[contact.phone] && compareTimestamp(readState[contact.phone], latestInbound.timestamp) >= 0) {
+                return;
+            }
             readState[contact.phone] = latestInbound.timestamp;
             persistReadState();
             saveReadStateToBackend(contact.phone, latestInbound.timestamp);
@@ -2334,6 +2951,7 @@
                 document.getElementById('chat-input').style.display = 'none';
                 document.getElementById('template-strip').style.display = 'none';
                 document.getElementById('edit-contact-btn').style.display = 'none';
+                document.getElementById('call-contact-btn').style.display = 'none';
                 document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
                 selectLatestContact();
             }
@@ -2397,7 +3015,12 @@
                     '<div class="empty-state">Falta configurar VITE_API_URL en Amplify.</div>';
                 return;
             }
+            if (conversationsLoading) {
+                conversationsReloadQueued = true;
+                return;
+            }
 
+            conversationsLoading = true;
             try {
                 const response = await fetch(API_URL);
                 const newMessages = await response.json();
@@ -2408,19 +3031,26 @@
                 const newInbound = inboundMessages.filter(message => !knownInboundIds.has(messageId(message)));
 
                 if (!firstConversationLoad && newInbound.length > 0) {
-                    playNotificationSound();
-                    newInbound
-                        .sort((a, b) => compareTimestamp(a.timestamp, b.timestamp))
-                        .forEach(message => {
+                    const sortedNewInbound = newInbound.sort((a, b) => compareTimestamp(a.timestamp, b.timestamp));
+                    const incomingCall = sortedNewInbound.find(message => isAnswerableCall(message));
+                    if (incomingCall) {
+                        startIncomingCallRingtone(messageId(incomingCall));
+                        showIncomingCallNotification(incomingCall.phone_number);
+                    } else {
+                        playNotificationSound();
+                    }
+                    sortedNewInbound.forEach(message => {
+                        if (!isAnswerableCall(message)) {
                             showBrowserNotification(message.phone_number, message.message || '');
-                        });
+                        }
+                    });
                 }
 
                 inboundMessages.forEach(message => knownInboundIds.add(messageId(message)));
                 previousMessageCount = inboundMessages.length;
                 firstConversationLoad = false;
 
-                await loadBackendReadState();
+                await loadBackendReadStateIfDue();
                 processMessages();
                 if (isInitialLoad && Object.keys(readState).length === 0) {
                     initializeReadStateFromCurrentContacts();
@@ -2433,6 +3063,12 @@
                 console.error('Error:', error);
                 document.getElementById('contacts-list').innerHTML =
                     '<div class="empty-state">Error al cargar conversaciones</div>';
+            } finally {
+                conversationsLoading = false;
+                if (conversationsReloadQueued) {
+                    conversationsReloadQueued = false;
+                    loadConversations();
+                }
             }
         }
 
@@ -2543,6 +3179,7 @@
             const audioMatch = text.match(/^\[Audio\]:\s*(https?:\/\/\S+)/i);
             const documentMatch = text.match(/^\[Documento\]:\s*([^|]+)\|\s*([^|]+)\|\s*(https?:\/\/\S+)/i);
             const locationMatch = text.match(/^\[Ubicacion\]:\s*([-.\d]+),\s*([-.\d]+)(.*)$/i);
+            const callMatch = text.match(/^\[Llamada\]:\s*(.*)$/i);
 
             if (imageMatch) {
                 const url = imageMatch[1];
@@ -2609,12 +3246,25 @@
                 </div>`;
             }
 
+            if (callMatch) {
+                const detail = callMatch[1].trim() || 'Evento de llamada';
+                const payload = message.call_payload || {};
+                const callId = message.call_id || extractCallId(payload);
+                const canAnswer = isAnswerableCall(message);
+                const encodedPayload = encodeURIComponent(JSON.stringify(payload));
+                return `<div class="call-card">
+                    <strong>📞 Llamada por WhatsApp</strong>
+                    <span>${escapeHtml(detail)}</span>
+                    ${canAnswer ? `<button class="secondary-btn" type="button" onclick="acceptIncomingCall('${escapeHtml(message.phone_number)}', '${escapeHtml(callId)}', '${escapeHtml(encodedPayload)}')">Contestar</button>` : ''}
+                </div>`;
+            }
+
             return escapeHtml(text);
         }
 
         function isRichMessageContent(message) {
             const text = formatTemplatePlaceholders(message.message).trim();
-            return /^\[(Imagen|Audio|Documento|Ubicacion)\]:/i.test(text);
+            return /^\[(Imagen|Audio|Documento|Ubicacion|Llamada)\]:/i.test(text);
         }
 
         function renderSelectedContact(options = {}) {
@@ -2627,6 +3277,7 @@
 
             const contactName = getContactName(selectedPhone);
             document.getElementById('edit-contact-btn').style.display = contactName ? 'none' : 'inline-flex';
+            document.getElementById('call-contact-btn').style.display = 'inline-flex';
             document.getElementById('chat-header').textContent = contactName
                 ? contactName
                 : selectedPhone;
@@ -2650,7 +3301,7 @@
                 return;
             }
             const distanceFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
-            const shouldStayAtBottom = options.forceScrollBottom || distanceFromBottom < 80;
+            const shouldStayAtBottom = options.forceScrollBottom || distanceFromBottom <= 8;
             const previousScrollHeight = messagesDiv.scrollHeight;
             const previousScrollTop = messagesDiv.scrollTop;
 
@@ -2810,12 +3461,16 @@
         document.getElementById('absence-modal').addEventListener('click', event => {
             if (event.target.id === 'absence-modal') closeAbsenceModal();
         });
+        document.getElementById('call-modal').addEventListener('click', event => {
+            if (event.target.id === 'call-modal') closeCallModal();
+        });
         document.addEventListener('keydown', event => {
             if (event.key === 'Escape') {
                 closeContactModal();
                 closeContactsModal();
                 closeTemplatesModal();
                 closeAbsenceModal();
+                closeCallModal();
             }
         });
 
