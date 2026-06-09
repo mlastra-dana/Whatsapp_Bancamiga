@@ -568,6 +568,72 @@
             border-top: 1px solid var(--border);
         }
 
+        .composer-wrap {
+            position: relative;
+            flex: 1;
+            display: flex;
+            min-width: 0;
+        }
+
+        .emoji-toggle {
+            position: absolute;
+            left: 8px;
+            bottom: 7px;
+            z-index: 2;
+            width: 28px;
+            height: 28px;
+            min-width: 28px;
+            min-height: 28px;
+            border: 0;
+            border-radius: 999px;
+            background: transparent;
+            color: var(--muted);
+            font-size: 17px;
+            cursor: pointer;
+        }
+
+        .emoji-toggle:hover {
+            background: var(--surface-muted);
+            color: var(--violet);
+        }
+
+        .emoji-picker {
+            position: absolute;
+            left: 0;
+            bottom: calc(100% + 8px);
+            width: 248px;
+            padding: 8px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            box-shadow: 0 18px 50px rgba(15, 15, 31, 0.16);
+            display: none;
+            grid-template-columns: repeat(8, 1fr);
+            gap: 4px;
+            z-index: 20;
+        }
+
+        .emoji-picker.open {
+            display: grid;
+        }
+
+        .emoji-option {
+            width: 26px;
+            height: 26px;
+            min-width: 26px;
+            min-height: 26px;
+            border: 0;
+            border-radius: 6px;
+            background: transparent;
+            cursor: pointer;
+            font-size: 17px;
+            line-height: 1;
+        }
+
+        .emoji-option:hover {
+            background: var(--surface-muted);
+        }
+
         .template-strip {
             display: none;
             gap: 8px;
@@ -599,7 +665,7 @@
             flex: 1;
             min-height: 38px;
             max-height: 110px;
-            padding: 9px 14px;
+            padding: 9px 14px 9px 42px;
             border: 1px solid var(--border);
             border-radius: 18px;
             font-size: 14px;
@@ -1157,6 +1223,50 @@
             font-weight: 800;
         }
 
+        .incoming-call-toast {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            width: min(360px, calc(100vw - 32px));
+            border: 1px solid rgba(24, 160, 88, 0.24);
+            border-radius: 8px;
+            background: #f4fff9;
+            box-shadow: 0 22px 70px rgba(15, 15, 31, 0.2);
+            padding: 14px;
+            display: none;
+            z-index: 80;
+        }
+
+        .incoming-call-toast.open {
+            display: grid;
+            gap: 10px;
+        }
+
+        .incoming-call-title {
+            color: var(--success);
+            font-size: 13px;
+            font-weight: 850;
+            text-transform: uppercase;
+        }
+
+        .incoming-call-name {
+            color: var(--navy);
+            font-size: 20px;
+            font-weight: 850;
+            line-height: 1.15;
+        }
+
+        .incoming-call-detail {
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .incoming-call-actions {
+            display: flex;
+            gap: 8px;
+            justify-content: flex-end;
+        }
+
         .switch {
             position: relative;
             width: 48px;
@@ -1320,13 +1430,27 @@
                     </div>
                     <div class="template-strip" id="template-strip"></div>
                     <div class="chat-input" id="chat-input" style="display:none;">
-                        <textarea id="message-input" placeholder="Escribe una respuesta manual..."></textarea>
+                        <div class="composer-wrap">
+                            <button class="emoji-toggle" type="button" id="emoji-toggle" onclick="toggleEmojiPicker()" aria-label="Abrir emojis">☺</button>
+                            <textarea id="message-input" placeholder=""></textarea>
+                            <div class="emoji-picker" id="emoji-picker" aria-label="Emojis rápidos"></div>
+                        </div>
                         <button class="primary-btn" onclick="sendMessage()" id="send-btn">Enviar</button>
                     </div>
                     <div class="send-status" id="send-status"></div>
                 </div>
             </div>
         </main>
+    </div>
+
+    <div class="incoming-call-toast" id="incoming-call-toast" aria-live="assertive">
+        <div class="incoming-call-title">Llamada entrante por WhatsApp</div>
+        <div class="incoming-call-name" id="incoming-call-name">Cliente</div>
+        <div class="incoming-call-detail" id="incoming-call-detail">Puedes contestar desde el panel.</div>
+        <div class="incoming-call-actions">
+            <button class="danger-btn" type="button" onclick="rejectIncomingCallToast()">Rechazar</button>
+            <button class="primary-btn" type="button" onclick="answerIncomingCallToast()">Contestar</button>
+        </div>
     </div>
 
     <div class="modal-backdrop" id="contact-modal" aria-hidden="true">
@@ -1444,6 +1568,7 @@
         const CALL_CONNECT_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/connect` : '';
         const CALL_PERMISSION_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/request-permission` : '';
         const CALL_ACCEPT_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/accept` : '';
+        const CALL_REJECT_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/reject` : '';
         const CALL_TERMINATE_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/terminate` : '';
         const ABSENCE_BOT_URL = API_BASE_URL ? `${API_BASE_URL}/absence-bot` : '';
         const CONTACTS_DIRECTORY_URL = 'contacts.json';
@@ -1467,6 +1592,7 @@
             ssalas: { username: 'ssalas', name: 'Sarina Salas', password: 'S@r1na-72Qx!' },
             mlastra: { username: 'mlastra', name: 'Maria Lastra', password: 'M@r1a-94Vz!' },
         };
+        const QUICK_EMOJIS = ['👍', '🙏', '😊', '✅', '📌', '📄', '📍', '⏳', '🙌', '👋', '🚚', '📦', '🔄', '📸', '☎️', '💬'];
         const DEFAULT_TEMPLATES = [
             {
                 title: 'Saludo inicial',
@@ -1514,9 +1640,11 @@
         let editingTemplateIndex = null;
         let expiredMediaUrls = new Set(loadExpiredMediaUrls());
         let activeCall = null;
+        let pendingIncomingCall = null;
         let incomingCallRingtoneTimer = null;
         let incomingCallRingtoneStopTimer = null;
         let lastRingingCallKey = '';
+        let audioContextUnlocked = false;
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
@@ -1557,6 +1685,20 @@
             if (!currentAgent) return;
             localStorage.setItem(LAST_ACTIVITY_STORAGE_KEY, String(Date.now()));
             resetInactivityTimer();
+            unlockNotificationAudio();
+        }
+
+        function unlockNotificationAudio() {
+            if (audioContextUnlocked) return;
+            try {
+                const ctx = notificationAudioContext || new (window.AudioContext || window.webkitAudioContext)();
+                notificationAudioContext = ctx;
+                if (ctx.state === 'suspended') {
+                    ctx.resume().then(() => { audioContextUnlocked = true; }).catch(() => {});
+                } else {
+                    audioContextUnlocked = true;
+                }
+            } catch (error) {}
         }
 
         function resetInactivityTimer() {
@@ -2003,8 +2145,75 @@
                 callId &&
                 offerSdp &&
                 /\[Llamada\]:\s*connect/i.test(detail) &&
-                !/completed|terminate|reject/i.test(detail)
+                !/completed|terminate|reject/i.test(detail) &&
+                !hasTerminalCallEvent(callId, message.phone_number)
             );
+        }
+
+        function isTerminalCallMessage(message, callId, phone) {
+            const messageCallId = message.call_id || extractCallId(message.call_payload || {});
+            if (!callId || messageCallId !== callId) return false;
+            if (phone && message.phone_number && normalizePhone(message.phone_number) !== normalizePhone(phone)) return false;
+            const detail = String(message.message || '').toLowerCase();
+            return /completed|terminate|terminated|reject|rejected|failed|finalizada|rechazada|no contestada/.test(detail);
+        }
+
+        function hasTerminalCallEvent(callId, phone) {
+            return allMessages.some(message => isTerminalCallMessage(message, callId, phone));
+        }
+
+        function reconcilePendingIncomingCall() {
+            if (!pendingIncomingCall) return;
+            if (hasTerminalCallEvent(pendingIncomingCall.callId, pendingIncomingCall.phone)) {
+                clearIncomingCallToast();
+                return;
+            }
+
+            const stillAnswerable = allMessages.some(message => {
+                const messageCallId = message.call_id || extractCallId(message.call_payload || {});
+                return messageCallId === pendingIncomingCall.callId && isAnswerableCall(message);
+            });
+            if (!stillAnswerable) clearIncomingCallToast();
+        }
+
+        function formatDuration(seconds) {
+            const value = Number(seconds);
+            if (!Number.isFinite(value) || value <= 0) return '';
+            const minutes = Math.floor(value / 60);
+            const remainingSeconds = Math.floor(value % 60);
+            if (!minutes) return `${remainingSeconds}s`;
+            return `${minutes}m ${String(remainingSeconds).padStart(2, '0')}s`;
+        }
+
+        function formatCallDetail(rawDetail, message) {
+            const detail = String(rawDetail || '').trim();
+            const payload = message.call_payload || {};
+            const lowered = detail.toLowerCase();
+            const direction = String(payload.direction || '').toUpperCase();
+            const event = String(payload.event || '').toLowerCase();
+            const status = String(payload.status || '').toLowerCase();
+            const duration = formatDuration(payload.duration);
+
+            if (/rechazada desde el panel/.test(lowered)) return 'Llamada rechazada desde el panel';
+            if (/contestada desde el panel/.test(lowered)) return 'Llamada contestada desde el panel';
+            if (/finalizada desde el panel/.test(lowered)) return 'Llamada finalizada desde el panel';
+            if (/no se pudo iniciar/.test(lowered)) return 'No se pudo iniciar la llamada';
+            if (/business/.test(lowered) || /saliente iniciada/.test(lowered)) return 'Solicitud de llamada saliente';
+            if (/completed/.test(lowered) || status === 'completed' || event === 'terminate') {
+                return duration ? `Llamada finalizada · ${duration}` : 'Llamada finalizada';
+            }
+            if (/failed/.test(lowered) || status === 'failed') return 'Llamada fallida';
+            if (/reject/.test(lowered) || /rejected/.test(lowered)) return 'Llamada rechazada';
+            if (/ringing/.test(lowered) || status === 'ringing') return 'Llamando...';
+            if (/accepted/.test(lowered) || status === 'accepted') return 'Llamada aceptada';
+            if (/connect/.test(lowered) || event === 'connect') {
+                return direction === 'USER_INITIATED'
+                    ? 'Llamada entrante'
+                    : 'Llamada saliente';
+            }
+            if (direction === 'USER_INITIATED') return 'Llamada iniciada por el cliente';
+            if (direction === 'BUSINESS_INITIATED') return 'Llamada iniciada desde el panel';
+            return detail || 'Evento de llamada';
         }
 
         function createCallPeerConnection(onRemoteAudio) {
@@ -2168,6 +2377,7 @@
         async function acceptIncomingCall(phone, callId, encodedPayload) {
             if (!currentAgent) return;
             stopIncomingCallRingtone();
+            clearIncomingCallToast();
             if (!CALL_ACCEPT_API_URL) {
                 openCallModal();
                 setCallStatus('No configurado', 'Falta configurar la URL del Lambda.', '', 'error');
@@ -2281,6 +2491,64 @@
             }
         }
 
+        async function rejectIncomingCall(phone, callId) {
+            stopIncomingCallRingtone();
+            clearIncomingCallToast();
+            if (!phone || !callId) return;
+            const status = document.getElementById('send-status');
+
+            if (!CALL_REJECT_API_URL) {
+                if (status) {
+                    status.className = 'send-status error';
+                    status.textContent = 'No se pudo rechazar: falta configurar la URL del Lambda.';
+                }
+                return;
+            }
+
+            closeCallModal();
+
+            try {
+                const response = await fetch(CALL_REJECT_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phone,
+                        call_id: callId,
+                        agent_username: currentAgent?.username || '',
+                        agent_name: currentAgent?.name || '',
+                    }),
+                });
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(friendlyCallError(data.error || data));
+
+                allMessages.push({
+                    phone_number: phone,
+                    timestamp: new Date().toISOString(),
+                    direction: 'outbound',
+                    message: '[Llamada]: llamada rechazada desde el panel',
+                    msg_type: 'call',
+                    call_id: callId,
+                    agent_username: currentAgent?.username || '',
+                    agent_name: currentAgent?.name || '',
+                });
+                processMessages();
+                renderContacts();
+                if (selectedPhone === phone) renderSelectedContact({ forceRender: true });
+                if (status) {
+                    status.className = 'send-status success';
+                    status.textContent = 'Llamada rechazada.';
+                    setTimeout(() => {
+                        if (status.textContent === 'Llamada rechazada.') status.textContent = '';
+                    }, 2500);
+                }
+            } catch (error) {
+                if (status) {
+                    status.className = 'send-status error';
+                    status.textContent = 'No se pudo rechazar la llamada: ' + friendlyCallError(error.message);
+                }
+            }
+        }
+
         function cleanupActiveCall() {
             stopIncomingCallRingtone();
             if (!activeCall) return;
@@ -2295,6 +2563,7 @@
         }
 
         async function endWhatsAppCall() {
+            clearIncomingCallToast();
             if (!activeCall) {
                 closeCallModal();
                 return;
@@ -2633,15 +2902,6 @@
             renderTemplateChips();
         }
 
-        function unlockNotificationAudio() {
-            try {
-                if (!notificationAudioContext) {
-                    notificationAudioContext = new (window.AudioContext || window.webkitAudioContext)();
-                }
-                if (notificationAudioContext.state === 'suspended') notificationAudioContext.resume();
-            } catch (error) {}
-        }
-
         document.addEventListener('click', () => {
             unlockNotificationAudio();
             if (Notification.permission === 'default') {
@@ -2678,22 +2938,26 @@
             } catch (error) {}
         }
 
-        function playIncomingCallSound() {
+        async function playIncomingCallSound() {
             try {
                 const ctx = notificationAudioContext || new (window.AudioContext || window.webkitAudioContext)();
                 notificationAudioContext = ctx;
-                if (ctx.state === 'suspended') ctx.resume();
+                if (ctx.state === 'suspended') await ctx.resume();
                 const now = ctx.currentTime;
                 const notes = [
-                    { start: 0, freq: 440, duration: 0.32, gain: 0.16 },
-                    { start: 0.34, freq: 494, duration: 0.32, gain: 0.16 },
-                    { start: 0.78, freq: 440, duration: 0.32, gain: 0.16 },
-                    { start: 1.12, freq: 494, duration: 0.32, gain: 0.16 },
+                    { start: 0, freq: 440, duration: 0.42, gain: 0.24 },
+                    { start: 0.48, freq: 554, duration: 0.42, gain: 0.22 },
+                    { start: 1.1, freq: 440, duration: 0.42, gain: 0.24 },
+                    { start: 1.58, freq: 554, duration: 0.42, gain: 0.22 },
+                    { start: 2.85, freq: 440, duration: 0.42, gain: 0.24 },
+                    { start: 3.33, freq: 554, duration: 0.42, gain: 0.22 },
+                    { start: 3.95, freq: 440, duration: 0.42, gain: 0.24 },
+                    { start: 4.43, freq: 554, duration: 0.42, gain: 0.22 },
                 ];
                 notes.forEach(note => {
                     const osc = ctx.createOscillator();
                     const gain = ctx.createGain();
-                    osc.type = 'triangle';
+                    osc.type = 'sine';
                     osc.frequency.setValueAtTime(note.freq, now + note.start);
                     gain.gain.setValueAtTime(0.0001, now + note.start);
                     gain.gain.linearRampToValueAtTime(note.gain, now + note.start + 0.025);
@@ -2719,8 +2983,8 @@
             stopIncomingCallRingtone();
             lastRingingCallKey = callKey;
             playIncomingCallSound();
-            incomingCallRingtoneTimer = setInterval(playIncomingCallSound, 2600);
-            incomingCallRingtoneStopTimer = setTimeout(stopIncomingCallRingtone, 30000);
+            incomingCallRingtoneTimer = setInterval(playIncomingCallSound, 5400);
+            incomingCallRingtoneStopTimer = setTimeout(stopIncomingCallRingtone, 45000);
         }
 
         function showBrowserNotification(phone, message) {
@@ -2737,6 +3001,83 @@
             new Notification(`Llamada entrante - ${name}`, {
                 body: 'Abre el panel para contestar por WhatsApp.',
             });
+        }
+
+        function showIncomingCallToast(message) {
+            if (!message || !isAnswerableCall(message)) return;
+            const payload = message.call_payload || {};
+            const callId = message.call_id || extractCallId(payload);
+            if (!callId) return;
+
+            pendingIncomingCall = {
+                phone: message.phone_number,
+                callId,
+                payload,
+                key: messageId(message),
+            };
+
+            const name = getContactName(message.phone_number) || message.phone_number;
+            document.getElementById('incoming-call-name').textContent = name;
+            document.getElementById('incoming-call-detail').textContent = `${message.phone_number} está llamando.`;
+            document.getElementById('incoming-call-toast').classList.add('open');
+        }
+
+        function dismissIncomingCallToast() {
+            stopIncomingCallRingtone();
+            document.getElementById('incoming-call-toast').classList.remove('open');
+        }
+
+        function clearIncomingCallToast() {
+            pendingIncomingCall = null;
+            dismissIncomingCallToast();
+        }
+
+        function answerIncomingCallToast() {
+            if (!pendingIncomingCall) return;
+            const { phone, callId, payload } = pendingIncomingCall;
+            selectedPhone = phone;
+            selectedContactRenderKey = '';
+            renderContacts();
+            renderSelectedContact({ forceScrollBottom: true });
+            clearIncomingCallToast();
+            acceptIncomingCall(phone, callId, encodeURIComponent(JSON.stringify(payload)));
+        }
+
+        function rejectIncomingCallToast() {
+            if (!pendingIncomingCall) return;
+            const { phone, callId } = pendingIncomingCall;
+            rejectIncomingCall(phone, callId);
+        }
+
+        function renderEmojiPicker() {
+            const picker = document.getElementById('emoji-picker');
+            if (!picker) return;
+            picker.innerHTML = QUICK_EMOJIS.map(emoji =>
+                `<button class="emoji-option" type="button" data-emoji="${emoji}" aria-label="Insertar ${emoji}">${emoji}</button>`
+            ).join('');
+            picker.querySelectorAll('.emoji-option').forEach(button => {
+                button.addEventListener('click', () => insertEmoji(button.dataset.emoji || ''));
+            });
+        }
+
+        function toggleEmojiPicker() {
+            document.getElementById('emoji-picker')?.classList.toggle('open');
+        }
+
+        function closeEmojiPicker() {
+            document.getElementById('emoji-picker')?.classList.remove('open');
+        }
+
+        function insertEmoji(emoji) {
+            if (!emoji) return;
+            const input = document.getElementById('message-input');
+            const start = input.selectionStart ?? input.value.length;
+            const end = input.selectionEnd ?? input.value.length;
+            input.value = `${input.value.slice(0, start)}${emoji}${input.value.slice(end)}`;
+            const cursor = start + emoji.length;
+            input.focus();
+            input.setSelectionRange(cursor, cursor);
+            closeEmojiPicker();
         }
 
         function loadReadState() {
@@ -3034,6 +3375,7 @@
                     if (incomingCall) {
                         startIncomingCallRingtone(messageId(incomingCall));
                         showIncomingCallNotification(incomingCall.phone_number);
+                        showIncomingCallToast(incomingCall);
                     } else {
                         playNotificationSound();
                     }
@@ -3047,6 +3389,7 @@
                 inboundMessages.forEach(message => knownInboundIds.add(messageId(message)));
                 previousMessageCount = inboundMessages.length;
                 firstConversationLoad = false;
+                reconcilePendingIncomingCall();
 
                 await loadBackendReadStateIfDue();
                 processMessages();
@@ -3249,11 +3592,12 @@
                 const payload = message.call_payload || {};
                 const callId = message.call_id || extractCallId(payload);
                 const canAnswer = isAnswerableCall(message);
+                const readableDetail = canAnswer ? 'Llamada entrante · esperando respuesta' : formatCallDetail(detail, message);
                 const encodedPayload = encodeURIComponent(JSON.stringify(payload));
                 return `<div class="call-card">
                     <strong>📞 Llamada por WhatsApp</strong>
-                    <span>${escapeHtml(detail)}</span>
-                    ${canAnswer ? `<button class="secondary-btn" type="button" onclick="acceptIncomingCall('${escapeHtml(message.phone_number)}', '${escapeHtml(callId)}', '${escapeHtml(encodedPayload)}')">Contestar</button>` : ''}
+                    <span>${escapeHtml(readableDetail)}</span>
+                    ${canAnswer ? `<div class="row-actions"><button class="danger-btn" type="button" onclick="rejectIncomingCall('${escapeHtml(message.phone_number)}', '${escapeHtml(callId)}')">Rechazar</button><button class="secondary-btn" type="button" onclick="acceptIncomingCall('${escapeHtml(message.phone_number)}', '${escapeHtml(callId)}', '${escapeHtml(encodedPayload)}')">Contestar</button></div>` : ''}
                 </div>`;
             }
 
@@ -3461,6 +3805,9 @@
         document.getElementById('call-modal').addEventListener('click', event => {
             if (event.target.id === 'call-modal') closeCallModal();
         });
+        document.addEventListener('click', event => {
+            if (!event.target.closest('.composer-wrap')) closeEmojiPicker();
+        });
         document.addEventListener('keydown', event => {
             if (event.key === 'Escape') {
                 closeContactModal();
@@ -3468,8 +3815,11 @@
                 closeTemplatesModal();
                 closeAbsenceModal();
                 closeCallModal();
+                closeEmojiPicker();
             }
         });
+
+        renderEmojiPicker();
 
         if (localStorage.getItem(SESSION_STORAGE_KEY) === 'active') {
             try {

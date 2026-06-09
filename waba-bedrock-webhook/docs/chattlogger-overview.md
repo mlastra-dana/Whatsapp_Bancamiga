@@ -141,6 +141,7 @@ Los placeholders como `{{1}}` se reemplazan por `NombreCliente` para que el hist
 | `GET` | `/conversations?phone=...` | Lista mensajes de un telefono. |
 | `POST` | `/send-message` | Envia respuesta manual desde el panel. |
 | `POST` | `/calls/accept` | Contesta una llamada entrante de WhatsApp con SDP answer generado por el navegador. |
+| `POST` | `/calls/reject` | Rechaza una llamada entrante antes de contestarla. |
 | `POST` | `/calls/terminate` | Termina una llamada WhatsApp activa por `call_id`. |
 | `POST` | `/calls/connect` | Capacidad tecnica para llamadas salientes. No se expone en la interfaz por restriccion actual de Meta para el numero/WABA de demo. |
 | `POST` | `/calls/request-permission` | Capacidad tecnica para solicitar permisos de llamada saliente. No se expone en la interfaz por restriccion actual de Meta para el numero/WABA de demo. |
@@ -290,7 +291,7 @@ Esta version incorpora una primera integracion para llamadas reales usando Whats
 
 1. El cliente llama al numero de WhatsApp Business.
 2. Meta envia un webhook `calls` con `direction=USER_INITIATED`, `event=connect`, `call_id` y `SDP offer`.
-3. El panel muestra el evento de llamada en el chat y habilita `Contestar`.
+3. El panel muestra el evento de llamada en el chat, abre una alerta flotante y habilita `Contestar` o `Rechazar`.
 4. Al contestar, el navegador solicita permiso de microfono.
 5. El panel crea una conexion `RTCPeerConnection` y genera un `SDP answer`.
 6. El panel llama:
@@ -320,6 +321,8 @@ POST /{PHONE_NUMBER_ID}/calls
 primero con `action=pre_accept` y luego con `action=accept`.
 8. El audio se conecta en el navegador usando WebRTC.
 9. El evento se guarda en `chat-logs` como `msg_type=call`.
+
+Si el usuario cuelga antes de que el asesor conteste, Meta envia un evento de finalizacion y el panel cierra la alerta flotante automaticamente. Si el asesor elige `Rechazar`, el panel llama `POST /calls/reject`, el Lambda envia `action=reject` a Meta y registra el evento en el historial.
 
 ### Terminar llamada
 

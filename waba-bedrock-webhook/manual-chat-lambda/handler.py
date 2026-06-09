@@ -697,6 +697,41 @@ def terminate_whatsapp_call(event):
         return response(exc.code, {"error": error_body})
 
 
+def reject_whatsapp_call(event):
+    body = parse_body(event)
+    telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
+    call_id = str(body.get("call_id") or body.get("id") or "").strip()
+    agent_username = str(body.get("agent_username") or "").strip()
+    agent_name = str(body.get("agent_name") or agent_username or "").strip()
+
+    if not call_id:
+        return response(400, {"error": "call_id is required"})
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "call_id": call_id,
+        "action": "reject",
+    }
+
+    try:
+        result = call_meta_api(payload)
+        if telefono:
+            guardar_evento_llamada(
+                telefono,
+                "[Llamada]: llamada rechazada desde el panel",
+                "salida",
+                call_id,
+                agent_username,
+                agent_name,
+                {"request": payload, "response": result},
+            )
+        return response(200, {"success": True, "result": result, "call_id": call_id})
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("WhatsApp call reject failed status=%s body=%s", exc.code, error_body[:5000])
+        return response(exc.code, {"error": error_body})
+
+
 def accept_whatsapp_call(event):
     body = parse_body(event)
     telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
@@ -1344,6 +1379,8 @@ def lambda_handler(event, context):
             return request_whatsapp_call_permission(event)
         if method == "POST" and path == "/calls/accept":
             return accept_whatsapp_call(event)
+        if method == "POST" and path == "/calls/reject":
+            return reject_whatsapp_call(event)
         if method == "POST" and path == "/calls/terminate":
             return terminate_whatsapp_call(event)
         if method == "GET" and path == "/contacts":
