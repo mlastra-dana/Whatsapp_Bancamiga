@@ -68,6 +68,7 @@ Responsabilidades:
 - Consultar definiciones de plantilla en Meta cuando llega `template_id`.
 - Hacer proxy de media temporal de Meta usando el token de WhatsApp.
 - Persistir contactos, plantillas rapidas, estado de lectura y presencia de asesores.
+- Registrar y contestar llamadas entrantes de WhatsApp desde el panel.
 
 ## Flujo principal de mensajes
 
@@ -139,8 +140,10 @@ Los placeholders como `{{1}}` se reemplazan por `NombreCliente` para que el hist
 | `GET` | `/conversations` | Lista conversaciones. |
 | `GET` | `/conversations?phone=...` | Lista mensajes de un telefono. |
 | `POST` | `/send-message` | Envia respuesta manual desde el panel. |
-| `POST` | `/calls/connect` | Inicia llamada saliente WhatsApp con SDP offer generado por el navegador. |
+| `POST` | `/calls/accept` | Contesta una llamada entrante de WhatsApp con SDP answer generado por el navegador. |
 | `POST` | `/calls/terminate` | Termina una llamada WhatsApp activa por `call_id`. |
+| `POST` | `/calls/connect` | Capacidad tecnica para llamadas salientes. No se expone en la interfaz por restriccion actual de Meta para el numero/WABA de demo. |
+| `POST` | `/calls/request-permission` | Capacidad tecnica para solicitar permisos de llamada saliente. No se expone en la interfaz por restriccion actual de Meta para el numero/WABA de demo. |
 | `GET` | `/media?url=...` | Proxy temporal de media Meta. |
 | `GET` | `/contacts` | Lista contactos guardados. |
 | `POST` | `/contacts` | Crea/actualiza contacto. |
@@ -283,16 +286,17 @@ Al hacer click en `Salir`, el panel envia `online=false`.
 
 Esta version incorpora una primera integracion para llamadas reales usando WhatsApp Calling API.
 
-### Flujo de llamada saliente
+### Flujo activo: llamadas iniciadas por el usuario
 
-1. El asesor hace click en `Llamar` dentro del chat.
-2. El navegador solicita permiso de microfono.
-3. El panel crea una conexion `RTCPeerConnection`.
-4. El panel genera un `SDP offer`.
-5. El panel llama:
+1. El cliente llama al numero de WhatsApp Business.
+2. Meta envia un webhook `calls` con `direction=USER_INITIATED`, `event=connect`, `call_id` y `SDP offer`.
+3. El panel muestra el evento de llamada en el chat y habilita `Contestar`.
+4. Al contestar, el navegador solicita permiso de microfono.
+5. El panel crea una conexion `RTCPeerConnection` y genera un `SDP answer`.
+6. El panel llama:
 
 ```http
-POST /calls/connect
+POST /calls/accept
 ```
 
 con:
@@ -300,21 +304,22 @@ con:
 ```json
 {
   "phone": "584120000000",
+  "call_id": "wacid...",
   "sdp": "v=0...",
   "agent_username": "mlastra",
   "agent_name": "Maria Lastra"
 }
 ```
 
-6. El Lambda llama a Meta en:
+7. El Lambda llama a Meta en:
 
 ```http
 POST /{PHONE_NUMBER_ID}/calls
 ```
 
-con `action=connect` y la sesion SDP.
-7. Si Meta devuelve un `SDP answer`, el panel lo aplica en WebRTC.
-8. El evento se guarda en `chat-logs` como `msg_type=call`.
+primero con `action=pre_accept` y luego con `action=accept`.
+8. El audio se conecta en el navegador usando WebRTC.
+9. El evento se guarda en `chat-logs` como `msg_type=call`.
 
 ### Terminar llamada
 
@@ -330,11 +335,28 @@ con el `call_id` devuelto por Meta. El Lambda envia `action=terminate` a Meta y 
 
 El webhook de WhatsApp ahora revisa `value.calls`. Si Meta envia eventos de llamadas, el Lambda los guarda en `chat-logs` como `msg_type=call` para que aparezcan en el historial.
 
+### Llamadas salientes
+
+El codigo conserva endpoints tecnicos para llamadas iniciadas por el negocio (`/calls/request-permission` y `/calls/connect`), pero la interfaz no muestra botones de llamada saliente en esta demo.
+
+Motivo: el numero actual es de Canada. Para este alcance de demo asumimos que las llamadas iniciadas por negocio no estan disponibles para numeros de Canada/USA, y Meta devuelve:
+
+```json
+{
+  "message": "Business-initiated calling is not available",
+  "code": 138013,
+  "error_subcode": 2593139,
+  "error_user_msg": "Business initiated calls not available for this account."
+}
+```
+
+Esto indica que la solicitud llega al Lambda y el Lambda llega a Meta, pero Meta bloquea las llamadas iniciadas por negocio para este WABA/numero. Para la demo, el alcance queda definido como llamadas entrantes reales iniciadas por el usuario y contestadas desde el panel.
+
 ### Nota tecnica
 
 La llamada real no usa WhatsApp Web. El audio sale del navegador del asesor por WebRTC usando el numero corporativo conectado a WhatsApp Cloud API.
 
-El punto mas sensible es el formato exacto del `SDP answer` y los eventos que Meta entregue en respuesta a `action=connect`. La extraccion en frontend y backend esta hecha de forma flexible para aceptar respuestas anidadas, pero puede requerir ajuste fino con la respuesta real de Meta en pruebas.
+El punto mas sensible es el formato exacto del `SDP offer/answer` y los eventos que Meta entregue en los webhooks `calls`. La extraccion en frontend y backend esta hecha de forma flexible para aceptar respuestas anidadas, pero puede requerir ajuste fino con nuevas variantes de payload de Meta.
 
 ## Bot de ausencia
 

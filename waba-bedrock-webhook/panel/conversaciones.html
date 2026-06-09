@@ -1312,7 +1312,6 @@
                             <span class="chat-subtitle" id="chat-subtitle"></span>
                         </div>
                         <div class="row-actions">
-                            <button class="secondary-btn call-btn" id="call-contact-btn" onclick="startWhatsAppCall()" style="display:none;">Llamar</button>
                             <button class="secondary-btn" id="edit-contact-btn" onclick="openContactModal()" style="display:none;">Guardar contacto</button>
                         </div>
                     </div>
@@ -2951,7 +2950,6 @@
                 document.getElementById('chat-input').style.display = 'none';
                 document.getElementById('template-strip').style.display = 'none';
                 document.getElementById('edit-contact-btn').style.display = 'none';
-                document.getElementById('call-contact-btn').style.display = 'none';
                 document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
                 selectLatestContact();
             }
@@ -3277,7 +3275,6 @@
 
             const contactName = getContactName(selectedPhone);
             document.getElementById('edit-contact-btn').style.display = contactName ? 'none' : 'inline-flex';
-            document.getElementById('call-contact-btn').style.display = 'inline-flex';
             document.getElementById('chat-header').textContent = contactName
                 ? contactName
                 : selectedPhone;
