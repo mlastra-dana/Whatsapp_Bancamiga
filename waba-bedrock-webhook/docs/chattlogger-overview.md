@@ -24,9 +24,9 @@ Archivo principal:
 
 Responsabilidades:
 
-- Login demo para dos asesores:
-  - `ssalas` / Sarina Salas
-  - `mlastra` / Maria Lastra
+- Login demo para dos asesores genericos:
+  - `asesor1` / Asesor 1
+  - `asesor2` / Asesor 2
 - Panel de conversaciones con polling cada 2 segundos.
 - Dashboard simple:
   - asesor actual;
@@ -307,8 +307,8 @@ con:
   "phone": "584120000000",
   "call_id": "wacid...",
   "sdp": "v=0...",
-  "agent_username": "mlastra",
-  "agent_name": "Maria Lastra"
+  "agent_username": "asesor1",
+  "agent_name": "Asesor 1"
 }
 ```
 
