@@ -1,0 +1,22 @@
+- generic [ref=e3]:
+  - generic [ref=e4]:
+    - generic [ref=e5]:
+      - img "DANAConnect" [ref=e6]
+      - generic [ref=e7]: Welcome to DANAConnect
+      - generic [ref=e8]: ChattLogger
+    - generic [ref=e9]:
+      - generic [ref=e10]:
+        - generic [ref=e11]: Usuario *
+        - textbox "Usuario *" [active] [ref=e12]:
+          - /placeholder: Introduzca su Nombre de Usuario
+      - generic [ref=e13]:
+        - generic [ref=e14]: Contraseña *
+        - textbox "Contraseña *" [ref=e15]:
+          - /placeholder: Contraseña
+      - generic [ref=e16]:
+        - button "ENTRAR" [ref=e17] [cursor=pointer]
+        - button "Recuperar tu Contraseña" [ref=e18]
+        - button "Entrar utilizando una compañía diferente" [ref=e19]
+      - alert [ref=e20]
+      - generic [ref=e21]: Política de Privacidad | Términos y condiciones de uso
+  - generic [ref=e22]: DANAConnect Corp. Todos los derechos reservados.

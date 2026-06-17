@@ -24,9 +24,9 @@ Archivo principal:
 
 Responsabilidades:
 
-- Login demo para dos asesores genericos:
-  - `asesor1` / Asesor 1
-  - `asesor2` / Asesor 2
+- Modulo visualmente alineado a DANAConnect.
+- Pantalla de acceso estilo DANAConnect para la demo, con usuarios genericos de asesor.
+- Soporte para identificacion del asesor desde contexto inyectado por DANAConnect (`window.CHATTLOGGER_AGENT` o `window.DANACONNECT_USER`) si luego se embebe con sesion real.
 - Panel de conversaciones con polling cada 2 segundos.
 - Dashboard simple:
   - asesor actual;
@@ -281,7 +281,12 @@ Un asesor se considera conectado si:
 - `online=true`;
 - y `last_seen` tiene menos de 90 segundos.
 
-Al hacer click en `Salir`, el panel envia `online=false`.
+En la demo, el panel usa una pantalla de acceso local con usuarios genericos. Si DANAConnect inyecta el usuario de sesion en el futuro, el panel puede iniciar con ese contexto sin cambiar el flujo operativo.
+
+Usuarios locales de demo:
+
+- `asesor1` / `Dana-2026-A!`
+- `asesor2` / `Dana-2026-B!`
 
 ## Llamadas por WhatsApp
 
@@ -307,8 +312,8 @@ con:
   "phone": "584120000000",
   "call_id": "wacid...",
   "sdp": "v=0...",
-  "agent_username": "asesor1",
-  "agent_name": "Asesor 1"
+  "agent_username": "usuario-danaconnect",
+  "agent_name": "Usuario DANAConnect"
 }
 ```
 
@@ -398,7 +403,7 @@ waba-bedrock-webhook/manual-chat-lambda/handler.py
 
 - Persistir media en S3 cuando llega el webhook.
 - Agregar previsualizacion real de PDF/documentos si se guarda la media.
-- Mover usuarios demo a autenticacion real si el panel deja de ser demo.
+- Conectar el login visual a autenticacion real de DANAConnect cuando el modulo deje de ser demo.
 - Evaluar SSE o WebSocket para notificaciones en tiempo real sin polling.
 - Agregar roles, por ejemplo asesor y administrador.
 - Separar configuracion por ambiente: local, demo y produccion.

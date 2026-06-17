@@ -3,20 +3,20 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChattLogger — Example Company</title>
-    <link rel="icon" type="image/png" href="assets/brand/icon-company.png">
-    <link rel="apple-touch-icon" href="assets/brand/icon-company.png">
+    <title>ChattLogger — DANAConnect</title>
+    <link rel="icon" type="image/png" href="assets/brand/Dana-favicon.png">
+    <link rel="apple-touch-icon" href="assets/brand/Dana-favicon.png">
     <style>
         :root {
-            --violet: #4B16B6;
-            --purple: #6C3DE1;
-            --lilac: #BEA6FF;
+            --violet: #F05A28;
+            --purple: #FF7A30;
+            --lilac: #FFD2C0;
             --navy: #0F0F1F;
             --slate: #3B4255;
-            --lavender: #F7F5FC;
+            --lavender: #F7F7F7;
             --surface: #ffffff;
-            --surface-muted: #F9F7FD;
-            --border: #E5E0F2;
+            --surface-muted: #FAFAFA;
+            --border: #E4E4E7;
             --text: #161525;
             --muted: #5F6678;
             --success: #18a058;
@@ -27,7 +27,7 @@
 
         body {
             height: 100vh;
-            background: #F4F2F8;
+            background: #F5F5F5;
             color: var(--text);
             font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
             overflow: hidden;
@@ -40,119 +40,153 @@
             overflow: hidden;
         }
 
-        .welcome-screen {
+        .login-screen {
             min-height: 100vh;
-            background:
-                linear-gradient(180deg, #ffffff 0 96px, var(--lavender) 96px 100%);
+            background: #ffffff;
             display: flex;
             align-items: center;
             justify-content: center;
-            padding: 32px;
+            padding: 34px 18px;
+            color: #4a4a4a;
         }
 
-        .welcome-card {
-            width: min(520px, 100%);
-            background:
-                radial-gradient(circle at 88% 10%, rgba(190, 166, 255, 0.22), transparent 22%),
-                linear-gradient(135deg, #4B16B6 0%, #321078 58%, #151122 100%);
-            color: #fff;
-            border: 0;
-            border-radius: 8px;
-            box-shadow: 0 28px 80px rgba(15, 15, 31, 0.16);
-            padding: 44px;
+        .login-wrap {
+            width: min(760px, 100%);
         }
 
-        .welcome-logo {
-            width: 280px;
-            height: 82px;
-            object-fit: contain;
-            object-position: left center;
-            display: block;
-            margin-bottom: 24px;
-        }
-
-        .welcome-card h1 {
-            color: #fff;
-            font-size: 34px;
-            line-height: 1.1;
-            margin-bottom: 28px;
-        }
-
-        .remember-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            color: rgba(255, 255, 255, 0.78);
-            font-size: 14px;
-            font-weight: 600;
-            margin-bottom: 22px;
-        }
-
-        .remember-row input {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--violet);
-        }
-
-        .login-fields {
+        .login-card {
+            min-height: 310px;
+            border: 1px solid #dddddd;
+            border-radius: 4px;
+            background: #ffffff;
+            box-shadow: 0 2px 10px rgba(15, 15, 31, 0.12);
             display: grid;
-            gap: 10px;
-            max-width: 340px;
-            margin-bottom: 16px;
+            grid-template-columns: minmax(0, 1fr) minmax(290px, 1fr);
+            gap: 44px;
+            align-items: center;
+            padding: 42px 52px 36px;
         }
 
-        .login-fields input {
-            min-height: 40px;
-            border: 1px solid rgba(255, 255, 255, 0.28);
-            border-radius: 6px;
-            background: rgba(255, 255, 255, 0.12);
-            color: #fff;
-            padding: 0 12px;
+        .login-brand {
+            text-align: center;
+            min-width: 0;
+        }
+
+        .login-logo {
+            width: min(300px, 100%);
+            height: auto;
+            object-fit: contain;
+            margin: 0 auto 22px;
+            display: block;
+        }
+
+        .login-welcome {
+            color: #4c4c4c;
+            font-size: 17px;
+            font-weight: 650;
+            margin-bottom: 8px;
+        }
+
+        .login-company {
+            color: #727272;
+            font-size: 18px;
+            font-weight: 800;
+        }
+
+        .login-form {
+            display: grid;
+            gap: 15px;
+            min-width: 0;
+        }
+
+        .login-field {
+            display: grid;
+            grid-template-columns: 110px minmax(0, 1fr);
+            align-items: center;
+            gap: 12px;
+        }
+
+        .login-field label {
+            color: #444444;
+            font-weight: 700;
+            font-size: 14px;
+        }
+
+        .login-required {
+            color: var(--violet);
+        }
+
+        .login-field input {
+            width: 100%;
+            height: 34px;
+            border: 1px solid #cfcfcf;
+            border-radius: 4px;
+            padding: 0 10px;
+            color: #333333;
             font: inherit;
             outline: none;
         }
 
-        .login-fields input::placeholder {
-            color: rgba(255, 255, 255, 0.62);
+        .login-field input:focus {
+            border-color: var(--violet);
+            box-shadow: 0 0 0 2px rgba(240, 90, 40, 0.12);
         }
 
-        .login-fields input:focus {
-            border-color: rgba(255, 255, 255, 0.72);
-            box-shadow: 0 0 0 3px rgba(190, 166, 255, 0.24);
+        .login-actions {
+            padding-left: 122px;
+            display: grid;
+            gap: 7px;
+            justify-items: start;
+        }
+
+        .login-submit {
+            min-width: 120px;
+            height: 34px;
+            border: 0;
+            border-radius: 4px;
+            background: var(--violet);
+            color: #ffffff;
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.15s ease, background 0.15s ease;
+        }
+
+        .login-submit:hover {
+            background: #e84b1b;
+            transform: translateY(-1px);
+        }
+
+        .login-link {
+            border: 0;
+            background: transparent;
+            color: #555555;
+            font-size: 13px;
+            padding: 0;
+            cursor: default;
         }
 
         .login-error {
-            color: #FFE3E0;
-            font-size: 12px;
-            font-weight: 700;
             min-height: 18px;
-            margin-bottom: 8px;
-        }
-
-        .demo-login-row {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            max-width: 340px;
-            margin-bottom: 16px;
-        }
-
-        .demo-login-btn {
-            min-height: 36px;
-            border: 1px solid rgba(255, 255, 255, 0.32);
-            border-radius: 999px;
-            background: rgba(255, 255, 255, 0.13);
-            color: #fff;
-            padding: 0 14px;
-            font: inherit;
-            font-size: 13px;
+            padding-left: 122px;
+            color: var(--danger);
+            font-size: 12px;
             font-weight: 750;
-            cursor: pointer;
         }
 
-        .demo-login-btn:hover {
-            background: rgba(255, 255, 255, 0.22);
-            border-color: rgba(255, 255, 255, 0.58);
+        .login-legal {
+            grid-column: 1 / -1;
+            text-align: center;
+            color: #555555;
+            font-size: 13px;
+            margin-top: 8px;
+        }
+
+        .login-footer {
+            color: #8a8a8a;
+            font-size: 12px;
+            text-align: center;
+            margin-top: 10px;
         }
 
         .topbar {
@@ -180,8 +214,8 @@
         }
 
         .brand-logo {
-            width: 184px;
-            height: 54px;
+            width: 188px;
+            height: 50px;
             object-fit: contain;
             object-position: left center;
             display: block;
@@ -314,15 +348,6 @@
         }
 
         .primary-btn:hover { background: var(--purple); }
-
-        .welcome-card .primary-btn {
-            background: #fff;
-            color: var(--violet);
-        }
-
-        .welcome-card .primary-btn:hover {
-            background: #F0EAFF;
-        }
 
         .secondary-btn {
             background: var(--surface);
@@ -1318,10 +1343,15 @@
         }
 
         @media (max-width: 768px) {
-            .welcome-screen { padding: 18px; align-items: flex-start; }
-            .welcome-card { padding: 28px; }
-            .welcome-logo { width: 220px; height: 64px; }
-            .welcome-card h1 { font-size: 28px; }
+            .login-screen { align-items: flex-start; padding: 20px 14px; }
+            .login-card {
+                grid-template-columns: 1fr;
+                gap: 26px;
+                padding: 30px 24px 26px;
+            }
+            .login-field { grid-template-columns: 1fr; gap: 6px; }
+            .login-actions,
+            .login-error { padding-left: 0; }
             .topbar { align-items: flex-start; flex-direction: column; }
             .brand-logo { width: 220px; height: 64px; }
             .product-title { border-left: 0; padding-left: 0; }
@@ -1340,29 +1370,40 @@
     </style>
 </head>
 <body>
-    <section class="welcome-screen" id="welcome-screen">
-        <div class="welcome-card">
-            <div>
-                <img class="welcome-logo" src="assets/brand/logo-company-white.png" alt="Example Company">
-                <h1>ChattLogger</h1>
-                <div class="login-fields">
-                    <input id="login-username" autocomplete="username" placeholder="Usuario">
-                    <input id="login-password" type="password" autocomplete="current-password" placeholder="Contraseña">
+    <section class="login-screen" id="login-screen">
+        <div class="login-wrap">
+            <div class="login-card">
+                <div class="login-brand">
+                    <img class="login-logo" src="assets/brand/logo-danaconnect-horizontal.jpg" alt="DANAConnect">
+                    <div class="login-welcome">Welcome to DANAConnect</div>
+                    <div class="login-company">ChattLogger</div>
                 </div>
-                <div class="demo-login-row" aria-label="Accesos rápidos de demo">
-                    <button class="demo-login-btn" type="button" onclick="fillDemoLogin('asesor1')">Asesor 1</button>
-                    <button class="demo-login-btn" type="button" onclick="fillDemoLogin('asesor2')">Asesor 2</button>
-                </div>
-                <div class="login-error" id="login-error"></div>
-                <button class="primary-btn" onclick="enterPanel()">Iniciar</button>
+                <form class="login-form" id="login-form">
+                    <div class="login-field">
+                        <label for="login-username">Usuario <span class="login-required">*</span></label>
+                        <input id="login-username" name="username" type="text" autocomplete="username" placeholder="Introduzca su Nombre de Usuario">
+                    </div>
+                    <div class="login-field">
+                        <label for="login-password">Contraseña <span class="login-required">*</span></label>
+                        <input id="login-password" name="password" type="password" autocomplete="current-password" placeholder="Contraseña">
+                    </div>
+                    <div class="login-actions">
+                        <button class="login-submit" type="submit">ENTRAR</button>
+                        <button class="login-link" type="button">Recuperar tu Contraseña</button>
+                        <button class="login-link" type="button">Entrar utilizando una compañía diferente</button>
+                    </div>
+                    <div class="login-error" id="login-error" role="alert" aria-live="polite"></div>
+                    <div class="login-legal">Política de Privacidad | Términos y condiciones de uso</div>
+                </form>
             </div>
+            <div class="login-footer">DANAConnect Corp. Todos los derechos reservados.</div>
         </div>
     </section>
 
-    <div class="app-shell" id="app-shell" style="display:none;">
+    <div class="app-shell" id="app-shell" style="display: none;">
         <header class="topbar">
             <div class="brand-lockup">
-                <img class="brand-logo" src="assets/brand/logo-company.png" alt="Example Company">
+                <img class="brand-logo" src="assets/brand/logo-danaconnect-horizontal.jpg" alt="DANAConnect">
                 <div class="product-title">
                     <h1>ChattLogger</h1>
                 </div>
@@ -1588,15 +1629,16 @@
         const READ_STATE_REFRESH_MS = 10000;
         const AGENT_HEARTBEAT_MS = 15000;
         const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
+        const DEFAULT_EMBEDDED_AGENT = { username: 'danaconnect-user', name: 'Usuario DANAConnect' };
         const DEMO_AGENTS = {
-            asesor1: { username: 'asesor1', name: 'Asesor 1', password: 'Demo-2026-A!' },
-            asesor2: { username: 'asesor2', name: 'Asesor 2', password: 'Demo-2026-B!' },
+            asesor1: { username: 'asesor1', name: 'Asesor 1', password: 'Dana-2026-A!' },
+            asesor2: { username: 'asesor2', name: 'Asesor 2', password: 'Dana-2026-B!' },
         };
         const QUICK_EMOJIS = ['👍', '🙏', '😊', '✅', '📌', '📄', '📍', '⏳', '🙌', '👋', '🚚', '📦', '🔄', '📸', '☎️', '💬'];
         const DEFAULT_TEMPLATES = [
             {
                 title: 'Saludo inicial',
-                body: 'Hola, gracias por escribirnos. Soy un asesor de Example Company. ¿En qué puedo ayudarte?'
+                body: 'Hola, gracias por escribirnos. Soy un asesor de DANAConnect. ¿En qué puedo ayudarte?'
             },
             {
                 title: 'Horario de atención',
@@ -1650,29 +1692,57 @@
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
         };
 
+        function getEmbeddedAgent() {
+            const params = new URLSearchParams(window.location.search);
+            const injectedAgent = window.CHATTLOGGER_AGENT || window.DANACONNECT_USER || {};
+            const username = String(
+                injectedAgent.username ||
+                injectedAgent.user ||
+                injectedAgent.login ||
+                injectedAgent.email ||
+                params.get('agent_username') ||
+                params.get('username') ||
+                DEFAULT_EMBEDDED_AGENT.username
+            ).trim();
+            const name = String(
+                injectedAgent.name ||
+                injectedAgent.full_name ||
+                injectedAgent.displayName ||
+                params.get('agent_name') ||
+                params.get('name') ||
+                username ||
+                DEFAULT_EMBEDDED_AGENT.name
+            ).trim();
+            return {
+                username: username || DEFAULT_EMBEDDED_AGENT.username,
+                name: name || DEFAULT_EMBEDDED_AGENT.name,
+            };
+        }
+
+        function hasInjectedAgent() {
+            return Boolean(window.CHATTLOGGER_AGENT || window.DANACONNECT_USER);
+        }
+
         function getDemoAgent(username, password) {
-            const normalizedUsername = String(username || '').trim().toLowerCase();
-            const agent = DEMO_AGENTS[normalizedUsername];
-            if (!agent || agent.password !== String(password || '')) return null;
-            return { username: agent.username, name: agent.name };
+            const cleanUsername = String(username || '').trim().toLowerCase();
+            const cleanPassword = String(password || '');
+            const agent = DEMO_AGENTS[cleanUsername];
+            if (!agent || agent.password !== cleanPassword) return null;
+            return {
+                username: agent.username,
+                name: agent.name,
+            };
         }
 
         function setLoginError(message) {
-            document.getElementById('login-error').textContent = message || '';
-        }
-
-        function fillDemoLogin(username) {
-            const agent = DEMO_AGENTS[String(username || '').toLowerCase()];
-            if (!agent) return;
-            document.getElementById('login-username').value = agent.username;
-            document.getElementById('login-password').value = agent.password;
-            setLoginError('');
+            const errorEl = document.getElementById('login-error');
+            if (errorEl) errorEl.textContent = message || '';
         }
 
         function setCurrentAgent(agent) {
             currentAgent = agent;
             document.getElementById('current-agent-metric').textContent = agent ? agent.name : '-';
-            document.getElementById('current-agent-status').textContent = agent ? agent.username : 'Sin sesión';
+            document.getElementById('current-agent-status').textContent = agent ? agent.username : 'Sin usuario';
         }
 
         function clearSessionStorage() {
@@ -1703,7 +1773,10 @@
 
         function resetInactivityTimer() {
             if (inactivityTimer) clearTimeout(inactivityTimer);
-            if (!currentAgent) return;
+            if (!currentAgent) {
+                inactivityTimer = null;
+                return;
+            }
             inactivityTimer = setTimeout(() => {
                 logoutPanel({ reason: 'inactivity' });
             }, INACTIVITY_TIMEOUT_MS);
@@ -1716,23 +1789,19 @@
 
         function enterPanel(agent = null) {
             const loginAgent = agent || getDemoAgent(
-                document.getElementById('login-username').value,
-                document.getElementById('login-password').value,
+                document.getElementById('login-username')?.value,
+                document.getElementById('login-password')?.value
             );
-
             if (!loginAgent) {
                 setLoginError('Usuario o contraseña inválidos.');
                 return;
             }
-
             setLoginError('');
             setCurrentAgent(loginAgent);
-
             localStorage.setItem(SESSION_STORAGE_KEY, 'active');
             localStorage.setItem(AGENT_SESSION_STORAGE_KEY, JSON.stringify(loginAgent));
             touchActivity();
-
-            document.getElementById('welcome-screen').style.display = 'none';
+            document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-shell').style.display = 'flex';
             loadTemplates().then(renderTemplateChips);
             loadReadState();
@@ -1770,11 +1839,12 @@
             document.getElementById('edit-contact-btn').style.display = 'none';
             document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
             document.getElementById('app-shell').style.display = 'none';
-            document.getElementById('welcome-screen').style.display = 'flex';
+            document.getElementById('login-screen').style.display = 'flex';
             document.getElementById('login-password').value = '';
             if (options.reason === 'inactivity') {
                 setLoginError('Sesión cerrada por inactividad.');
             }
+            document.getElementById('login-username').focus();
         }
 
         async function loadContactsDirectory() {
@@ -3161,7 +3231,7 @@
                         .filter(agent => agent.online)
                         .map(agent => ({
                             ...agent,
-                            name: DEMO_AGENTS[agent.username]?.name || agent.name || agent.username,
+                            name: agent.name || agent.username,
                         }))
                     : [];
                 updateDashboard();
@@ -3231,8 +3301,8 @@
         function updateUnreadTitle() {
             const total = getTotalUnreadCount();
             document.title = total > 0
-                ? `(${total > 99 ? '99+' : total}) ChattLogger - Example Company`
-                : 'ChattLogger - Example Company';
+                ? `(${total > 99 ? '99+' : total}) ChattLogger - DANAConnect`
+                : 'ChattLogger - DANAConnect';
         }
 
         function markContactRead(phone) {
@@ -3690,7 +3760,7 @@
             if (!message || !selectedPhone) return;
             if (!currentAgent) {
                 status.className = 'send-status error';
-                status.textContent = 'Inicia sesión para responder.';
+                status.textContent = 'No se pudo identificar el usuario de DANAConnect.';
                 return;
             }
             if (!SEND_API_URL) {
@@ -3757,15 +3827,6 @@
             }
         });
 
-        ['login-username', 'login-password'].forEach(id => {
-            document.getElementById(id).addEventListener('keydown', event => {
-                if (event.key === 'Enter') {
-                    event.preventDefault();
-                    enterPanel();
-                }
-            });
-        });
-
         document.getElementById('search-input').addEventListener('keydown', event => {
             if (event.key === 'Enter') {
                 event.preventDefault();
@@ -3808,6 +3869,10 @@
         document.addEventListener('click', event => {
             if (!event.target.closest('.composer-wrap')) closeEmojiPicker();
         });
+        document.getElementById('login-form').addEventListener('submit', event => {
+            event.preventDefault();
+            enterPanel();
+        });
         document.addEventListener('keydown', event => {
             if (event.key === 'Escape') {
                 closeContactModal();
@@ -3820,18 +3885,28 @@
         });
 
         renderEmojiPicker();
-
-        if (localStorage.getItem(SESSION_STORAGE_KEY) === 'active') {
+        if (hasInjectedAgent()) {
+            enterPanel(getEmbeddedAgent());
+        } else if (localStorage.getItem(SESSION_STORAGE_KEY) === 'active') {
             try {
                 const savedAgent = JSON.parse(localStorage.getItem(AGENT_SESSION_STORAGE_KEY) || 'null');
                 if (savedAgent && savedAgent.username && storedSessionIsExpired()) {
                     sendAgentPresence(false, savedAgent);
                     clearSessionStorage();
                     setLoginError('Sesión cerrada por inactividad.');
+                    document.getElementById('login-username').focus();
                 } else if (savedAgent && savedAgent.username) {
                     enterPanel(savedAgent);
+                } else {
+                    clearSessionStorage();
+                    document.getElementById('login-username').focus();
                 }
-            } catch (error) {}
+            } catch (error) {
+                clearSessionStorage();
+                document.getElementById('login-username').focus();
+            }
+        } else {
+            document.getElementById('login-username').focus();
         }
     </script>
 </body>
