@@ -26,6 +26,8 @@ Responsabilidades:
 
 - Modulo visualmente alineado a DANAConnect.
 - Pantalla de acceso estilo DANAConnect para la demo, con usuarios genericos de asesor.
+- Pantalla Home tipo portal DANAConnect despues del login.
+- Acceso al panel de WhatsApp desde el modulo `ChattLogger` en la zona de aplicaciones.
 - Soporte para identificacion del asesor desde contexto inyectado por DANAConnect (`window.CHATTLOGGER_AGENT` o `window.DANACONNECT_USER`) si luego se embebe con sesion real.
 - Panel de conversaciones con polling cada 2 segundos.
 - Dashboard simple:

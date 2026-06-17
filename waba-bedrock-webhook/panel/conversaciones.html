@@ -206,6 +206,283 @@
             margin-top: 10px;
         }
 
+        .portal-home {
+            height: 100vh;
+            background: #ffffff;
+            color: #4b4b4b;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+
+        .portal-redbar {
+            height: 28px;
+            background: #f04424;
+            color: #ffffff;
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            gap: 24px;
+            padding: 0 18px;
+            font-size: 12px;
+            font-weight: 700;
+            flex: 0 0 auto;
+        }
+
+        .portal-redbar button {
+            border: 0;
+            background: transparent;
+            color: inherit;
+            font: inherit;
+            cursor: pointer;
+        }
+
+        .portal-head {
+            min-height: 86px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            border-bottom: 1px solid #dddddd;
+            flex: 0 0 auto;
+        }
+
+        .portal-logo {
+            width: 160px;
+            height: 58px;
+            object-fit: contain;
+            object-position: left center;
+            display: block;
+        }
+
+        .portal-user {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            color: #4b4b4b;
+            font-size: 12px;
+            text-align: left;
+        }
+
+        .portal-user strong {
+            display: block;
+            color: #333333;
+            font-size: 13px;
+            margin-top: 4px;
+        }
+
+        .portal-gear {
+            width: 34px;
+            height: 34px;
+            border: 1px solid #d6d6d6;
+            border-radius: 4px;
+            background: #f6f6f6;
+            color: #222222;
+            font-size: 18px;
+            cursor: pointer;
+        }
+
+        .portal-tabs {
+            height: 32px;
+            display: flex;
+            align-items: center;
+            border-bottom: 1px solid #dddddd;
+            flex: 0 0 auto;
+        }
+
+        .portal-menu-icon {
+            width: 32px;
+            text-align: center;
+            font-size: 20px;
+            color: #111111;
+        }
+
+        .portal-tab {
+            height: 26px;
+            min-width: 78px;
+            border: 1px solid #dddddd;
+            border-bottom-color: #ffffff;
+            background: #ffffff;
+            color: #555555;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 13px;
+        }
+
+        .portal-body {
+            flex: 1;
+            min-height: 0;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) 390px;
+            gap: 22px;
+            padding: 16px 18px;
+            overflow: auto;
+        }
+
+        .portal-main {
+            min-width: 0;
+        }
+
+        .portal-feature-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+            margin-bottom: 22px;
+        }
+
+        .portal-feature {
+            min-height: 112px;
+            border: 1px solid #dddddd;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #fafafa, #ffffff);
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            padding: 16px;
+        }
+
+        .portal-feature-icon {
+            width: 88px;
+            height: 88px;
+            border-radius: 50%;
+            background: #f04424;
+            color: #ffffff;
+            display: grid;
+            place-items: center;
+            font-size: 38px;
+            flex: 0 0 auto;
+        }
+
+        .portal-feature h2 {
+            font-size: 15px;
+            color: #444444;
+            text-transform: uppercase;
+            margin-bottom: 6px;
+        }
+
+        .portal-feature p {
+            color: #666666;
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
+        .portal-section-title {
+            color: #f04424;
+            font-size: 13px;
+            font-weight: 800;
+            margin: 0 0 10px 10px;
+        }
+
+        .portal-table {
+            width: 100%;
+            border-collapse: collapse;
+            border: 1px solid #dddddd;
+            margin-bottom: 14px;
+            font-size: 12px;
+        }
+
+        .portal-table th,
+        .portal-table td {
+            border: 1px solid #dddddd;
+            padding: 10px 12px;
+            text-align: left;
+        }
+
+        .portal-table th {
+            background: #fafafa;
+            color: #555555;
+            font-weight: 500;
+        }
+
+        .portal-bar {
+            height: 18px;
+            border-radius: 3px;
+            background: linear-gradient(90deg, #bfe7f3, #22b7de);
+        }
+
+        .portal-chart {
+            width: min(760px, 100%);
+            height: 190px;
+            border: 1px solid #dddddd;
+            background:
+                linear-gradient(#dddddd 1px, transparent 1px) 0 0 / 100% 38px,
+                linear-gradient(90deg, #dddddd 1px, transparent 1px) 0 0 / 74px 100%,
+                #ffffff;
+            position: relative;
+        }
+
+        .portal-chart::before {
+            content: "";
+            position: absolute;
+            left: 88px;
+            bottom: 0;
+            width: 10px;
+            height: 112px;
+            background: #72cbe3;
+            box-shadow: 18px -20px 0 #f5b35d, 182px -8px 0 #72cbe3, 200px -4px 0 #f5b35d, 218px 0 0 #9cae58;
+        }
+
+        .portal-side {
+            min-width: 0;
+        }
+
+        .portal-app-title {
+            color: #f04424;
+            font-size: 13px;
+            font-weight: 800;
+            margin: 14px 0 12px;
+        }
+
+        .quick-start-grid,
+        .portal-app-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .quick-start-btn,
+        .portal-app-btn {
+            min-height: 78px;
+            border: 1px solid #dddddd;
+            border-radius: 3px;
+            background: #f1f1f1;
+            color: #555555;
+            display: grid;
+            place-items: center;
+            gap: 4px;
+            text-align: center;
+            padding: 10px 6px;
+            font: inherit;
+            font-size: 11px;
+            font-weight: 800;
+            cursor: default;
+        }
+
+        .portal-app-btn.functional {
+            background: #fff7f4;
+            border-color: rgba(240, 90, 40, 0.45);
+            color: #f04424;
+            cursor: pointer;
+            box-shadow: 0 10px 24px rgba(240, 90, 40, 0.12);
+        }
+
+        .portal-app-btn.functional:hover {
+            border-color: #f04424;
+            transform: translateY(-1px);
+        }
+
+        .portal-app-icon {
+            font-size: 28px;
+            filter: grayscale(1);
+            opacity: 0.86;
+        }
+
+        .portal-app-btn.functional .portal-app-icon {
+            filter: none;
+            opacity: 1;
+        }
+
         .topbar {
             background: var(--surface);
             border-bottom: 1px solid var(--border);
@@ -1369,6 +1646,13 @@
             .login-field { grid-template-columns: 1fr; gap: 6px; }
             .login-actions,
             .login-error { padding-left: 0; }
+            .portal-home { height: auto; min-height: 100vh; overflow: visible; }
+            .portal-redbar { justify-content: flex-start; overflow-x: auto; }
+            .portal-head { align-items: flex-start; flex-direction: column; gap: 10px; }
+            .portal-body { grid-template-columns: 1fr; overflow: visible; }
+            .portal-feature-row { grid-template-columns: 1fr; }
+            .quick-start-grid,
+            .portal-app-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
             .topbar { align-items: flex-start; flex-direction: column; }
             .brand-logo { width: 220px; height: 64px; }
             .product-title { border-left: 0; padding-left: 0; }
@@ -1416,6 +1700,116 @@
             </div>
             <div class="login-footer">DANAConnect Corp. Todos los derechos reservados.</div>
         </div>
+    </section>
+
+    <section class="portal-home" id="portal-home" style="display: none;">
+        <div class="portal-redbar">
+            <span>Knowledge Center</span>
+            <span>Support Chat</span>
+            <button type="button" onclick="logoutPanel()">Sign out</button>
+        </div>
+        <header class="portal-head">
+            <img class="portal-logo" src="assets/brand/logo-danaconnect-horizontal.jpg" alt="DANAConnect">
+            <div class="portal-user">
+                <div>
+                    <span id="portal-welcome">Welcome</span>
+                    <strong>Venturestars</strong>
+                </div>
+                <button class="portal-gear" type="button" aria-label="Configuración">⚙</button>
+            </div>
+        </header>
+        <div class="portal-tabs">
+            <div class="portal-menu-icon">☰</div>
+            <div class="portal-tab">Home</div>
+        </div>
+        <main class="portal-body">
+            <section class="portal-main">
+                <div class="portal-feature-row">
+                    <article class="portal-feature">
+                        <div class="portal-feature-icon">↗</div>
+                        <div>
+                            <h2>Send Communications</h2>
+                            <p>Click here to configure your email, call and sms communications.</p>
+                        </div>
+                    </article>
+                    <article class="portal-feature">
+                        <div class="portal-feature-icon">☷</div>
+                        <div>
+                            <h2>Manage Your Lists</h2>
+                            <p>Click here to manage your contact lists.</p>
+                        </div>
+                    </article>
+                </div>
+
+                <div class="portal-section-title">Communications sent this month</div>
+                <table class="portal-table" aria-label="Communications sent this month">
+                    <thead>
+                        <tr>
+                            <th>Channel</th>
+                            <th>Standard</th>
+                            <th>Premium</th>
+                            <th>Total</th>
+                            <th>%</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>EMAIL</td>
+                            <td>109</td>
+                            <td>112</td>
+                            <td>221</td>
+                            <td><div class="portal-bar" style="width: 76%;"></div></td>
+                        </tr>
+                        <tr>
+                            <td>SMS</td>
+                            <td>17</td>
+                            <td>0</td>
+                            <td>17</td>
+                            <td><div class="portal-bar" style="width: 10%;"></div></td>
+                        </tr>
+                        <tr>
+                            <td>API-Webhook</td>
+                            <td>6</td>
+                            <td>0</td>
+                            <td>6</td>
+                            <td><div class="portal-bar" style="width: 4%;"></div></td>
+                        </tr>
+                        <tr>
+                            <td>API-Plus-Webhook</td>
+                            <td>284</td>
+                            <td>0</td>
+                            <td>284</td>
+                            <td><div class="portal-bar" style="width: 98%;"></div></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="portal-section-title">Report of Communications</div>
+                <div class="portal-chart" aria-hidden="true"></div>
+            </section>
+
+            <aside class="portal-side">
+                <div class="portal-app-title">Quick Start</div>
+                <div class="quick-start-grid">
+                    <button class="quick-start-btn" type="button"><span class="portal-app-icon">▷</span>Empty</button>
+                    <button class="quick-start-btn" type="button"><span class="portal-app-icon">✉</span>Email</button>
+                    <button class="quick-start-btn" type="button"><span class="portal-app-icon">▯</span>SMS</button>
+                </div>
+
+                <div class="portal-app-title">Applications</div>
+                <div class="portal-app-grid">
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">☷</span>Conversation Manager</button>
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">☏</span>Contact Manager</button>
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">▦</span>Business Manager</button>
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">◴</span>Reports</button>
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">▣</span>Audit messages</button>
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">◇</span>DMARC Reporter</button>
+                    <button class="portal-app-btn functional" type="button" onclick="startChatLoggerPanel()"><span class="portal-app-icon">💬</span>ChattLogger</button>
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">✉</span>Email Validation</button>
+                    <button class="portal-app-btn" type="button"><span class="portal-app-icon">☏</span>WhatsApp Templates</button>
+                </div>
+            </aside>
+        </main>
     </section>
 
     <div class="app-shell" id="app-shell" style="display: none;">
@@ -1641,6 +2035,7 @@
         const SESSION_STORAGE_KEY = 'chattlogger.session.v1';
         const AGENT_SESSION_STORAGE_KEY = 'chattlogger.agent.v1';
         const LAST_ACTIVITY_STORAGE_KEY = 'chattlogger.lastActivity.v1';
+        const ACTIVE_VIEW_STORAGE_KEY = 'chattlogger.activeView.v1';
         const TEMPLATES_STORAGE_KEY = 'chattlogger.templates.v1';
         const EXPIRED_MEDIA_STORAGE_KEY = 'chattlogger.expiredMedia.v1';
         const REFRESH_INTERVAL_MS = 2000;
@@ -1776,6 +2171,7 @@
             localStorage.removeItem(SESSION_STORAGE_KEY);
             localStorage.removeItem(AGENT_SESSION_STORAGE_KEY);
             localStorage.removeItem(LAST_ACTIVITY_STORAGE_KEY);
+            localStorage.removeItem(ACTIVE_VIEW_STORAGE_KEY);
         }
 
         function touchActivity() {
@@ -1827,7 +2223,24 @@
             setCurrentAgent(loginAgent);
             localStorage.setItem(SESSION_STORAGE_KEY, 'active');
             localStorage.setItem(AGENT_SESSION_STORAGE_KEY, JSON.stringify(loginAgent));
+            localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, 'home');
             touchActivity();
+            document.getElementById('login-screen').style.display = 'none';
+            document.getElementById('portal-home').style.display = 'flex';
+            document.getElementById('app-shell').style.display = 'none';
+            document.getElementById('portal-welcome').textContent = `Welcome, ${loginAgent.username}`;
+        }
+
+        function startChatLoggerPanel() {
+            if (!currentAgent) {
+                document.getElementById('portal-home').style.display = 'none';
+                document.getElementById('login-screen').style.display = 'flex';
+                document.getElementById('login-username').focus();
+                return;
+            }
+            touchActivity();
+            localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, 'chatlogger');
+            document.getElementById('portal-home').style.display = 'none';
             document.getElementById('login-screen').style.display = 'none';
             document.getElementById('app-shell').style.display = 'flex';
             loadTemplates().then(renderTemplateChips);
@@ -1866,6 +2279,7 @@
             document.getElementById('edit-contact-btn').style.display = 'none';
             document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
             document.getElementById('app-shell').style.display = 'none';
+            document.getElementById('portal-home').style.display = 'none';
             document.getElementById('login-screen').style.display = 'flex';
             document.getElementById('login-password').value = '';
             if (options.reason === 'inactivity') {
@@ -3913,9 +4327,14 @@
 
         renderEmojiPicker();
         if (hasInjectedAgent()) {
+            const savedView = localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY);
             enterPanel(getEmbeddedAgent());
+            if (savedView === 'chatlogger') {
+                startChatLoggerPanel();
+            }
         } else if (localStorage.getItem(SESSION_STORAGE_KEY) === 'active') {
             try {
+                const savedView = localStorage.getItem(ACTIVE_VIEW_STORAGE_KEY);
                 const savedAgent = JSON.parse(localStorage.getItem(AGENT_SESSION_STORAGE_KEY) || 'null');
                 if (savedAgent && savedAgent.username && storedSessionIsExpired()) {
                     sendAgentPresence(false, savedAgent);
@@ -3924,6 +4343,9 @@
                     document.getElementById('login-username').focus();
                 } else if (savedAgent && savedAgent.username) {
                     enterPanel(savedAgent);
+                    if (savedView === 'chatlogger') {
+                        startChatLoggerPanel();
+                    }
                 } else {
                     clearSessionStorage();
                     document.getElementById('login-username').focus();
