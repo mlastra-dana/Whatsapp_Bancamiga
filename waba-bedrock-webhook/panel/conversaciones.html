@@ -135,8 +135,14 @@
         .login-actions {
             padding-left: 122px;
             display: grid;
-            gap: 7px;
+            gap: 10px;
             justify-items: start;
+        }
+
+        .login-quick-row {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
         }
 
         .login-submit {
@@ -157,13 +163,24 @@
             transform: translateY(-1px);
         }
 
-        .login-link {
-            border: 0;
-            background: transparent;
+        .login-quick-btn {
+            min-height: 32px;
+            border: 1px solid #d9d9d9;
+            border-radius: 4px;
+            background: #ffffff;
             color: #555555;
-            font-size: 13px;
-            padding: 0;
-            cursor: default;
+            font: inherit;
+            font-size: 12px;
+            font-weight: 750;
+            padding: 0 12px;
+            cursor: pointer;
+            transition: border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+        }
+
+        .login-quick-btn:hover {
+            border-color: var(--violet);
+            color: var(--violet);
+            background: #fff7f4;
         }
 
         .login-error {
@@ -1389,11 +1406,12 @@
                     </div>
                     <div class="login-actions">
                         <button class="login-submit" type="submit">ENTRAR</button>
-                        <button class="login-link" type="button">Recuperar tu Contraseña</button>
-                        <button class="login-link" type="button">Entrar utilizando una compañía diferente</button>
+                        <div class="login-quick-row" aria-label="Accesos rápidos">
+                            <button class="login-quick-btn" type="button" onclick="fillDemoLogin('danauser1')">danauser1</button>
+                            <button class="login-quick-btn" type="button" onclick="fillDemoLogin('danauser2')">danauser2</button>
+                        </div>
                     </div>
                     <div class="login-error" id="login-error" role="alert" aria-live="polite"></div>
-                    <div class="login-legal">Política de Privacidad | Términos y condiciones de uso</div>
                 </form>
             </div>
             <div class="login-footer">DANAConnect Corp. Todos los derechos reservados.</div>
@@ -1631,8 +1649,8 @@
         const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
         const DEFAULT_EMBEDDED_AGENT = { username: 'danaconnect-user', name: 'Usuario DANAConnect' };
         const DEMO_AGENTS = {
-            asesor1: { username: 'asesor1', name: 'Asesor 1', password: 'Dana-2026-A!' },
-            asesor2: { username: 'asesor2', name: 'Asesor 2', password: 'Dana-2026-B!' },
+            danauser1: { username: 'danauser1', name: 'Asesor 1', password: 'Dana-2026-A!' },
+            danauser2: { username: 'danauser2', name: 'Asesor 2', password: 'Dana-2026-B!' },
         };
         const QUICK_EMOJIS = ['👍', '🙏', '😊', '✅', '📌', '📄', '📍', '⏳', '🙌', '👋', '🚚', '📦', '🔄', '📸', '☎️', '💬'];
         const DEFAULT_TEMPLATES = [
@@ -1737,6 +1755,15 @@
         function setLoginError(message) {
             const errorEl = document.getElementById('login-error');
             if (errorEl) errorEl.textContent = message || '';
+        }
+
+        function fillDemoLogin(username) {
+            const agent = DEMO_AGENTS[String(username || '').trim().toLowerCase()];
+            if (!agent) return;
+            document.getElementById('login-username').value = agent.username;
+            document.getElementById('login-password').value = agent.password;
+            setLoginError('');
+            document.getElementById('login-password').focus();
         }
 
         function setCurrentAgent(agent) {

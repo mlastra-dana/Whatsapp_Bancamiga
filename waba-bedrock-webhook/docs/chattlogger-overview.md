@@ -285,8 +285,8 @@ En la demo, el panel usa una pantalla de acceso local con usuarios genericos. Si
 
 Usuarios locales de demo:
 
-- `asesor1` / `Dana-2026-A!`
-- `asesor2` / `Dana-2026-B!`
+- `danauser1` / `Dana-2026-A!`
+- `danauser2` / `Dana-2026-B!`
 
 ## Llamadas por WhatsApp
 
