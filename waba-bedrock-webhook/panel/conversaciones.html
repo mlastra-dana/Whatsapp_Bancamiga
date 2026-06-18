@@ -1158,36 +1158,39 @@
             position: relative;
             flex: 1;
             display: flex;
+            align-items: center;
+            gap: 8px;
             min-width: 0;
         }
 
         .emoji-toggle {
-            position: absolute;
-            left: 8px;
-            bottom: 7px;
-            z-index: 2;
-            width: 28px;
-            height: 28px;
-            min-width: 28px;
-            min-height: 28px;
+            position: static;
+            width: 38px;
+            height: 38px;
+            min-width: 38px;
+            min-height: 38px;
             border: 0;
             border-radius: 999px;
-            background: transparent;
-            color: var(--muted);
-            font-size: 17px;
+            background: var(--violet);
+            color: #ffffff;
+            font-size: 20px;
             cursor: pointer;
+            display: grid;
+            place-items: center;
+            flex: 0 0 auto;
         }
 
         .emoji-toggle:hover {
-            background: var(--surface-muted);
-            color: var(--violet);
+            background: #e84b1b;
+            color: #ffffff;
         }
 
         .emoji-picker {
             position: absolute;
             left: 0;
             bottom: calc(100% + 8px);
-            width: 248px;
+            width: 300px;
+            max-height: 220px;
             padding: 8px;
             border: 1px solid var(--border);
             border-radius: 8px;
@@ -1196,6 +1199,8 @@
             display: none;
             grid-template-columns: repeat(8, 1fr);
             gap: 4px;
+            overflow-y: auto;
+            overscroll-behavior: contain;
             z-index: 20;
         }
 
@@ -1251,7 +1256,7 @@
             flex: 1;
             min-height: 38px;
             max-height: 110px;
-            padding: 9px 14px 9px 42px;
+            padding: 9px 14px;
             border: 1px solid var(--border);
             border-radius: 18px;
             font-size: 14px;
@@ -1260,7 +1265,7 @@
             font-family: inherit;
         }
 
-        .chat-input button {
+        .chat-input > .primary-btn {
             border-radius: 20px;
             min-height: 38px;
             min-width: 86px;
@@ -1639,6 +1644,7 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
+            overflow: hidden;
             z-index: 20;
         }
 
@@ -1646,10 +1652,14 @@
 
         .modal {
             width: min(440px, 100%);
+            max-height: calc(100dvh - 40px);
             background: var(--surface);
             border-radius: 8px;
             border: 1px solid var(--border);
             box-shadow: 0 24px 80px rgba(15, 15, 31, 0.22);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
         }
 
         .modal.large {
@@ -1659,6 +1669,11 @@
         .modal-header {
             padding: 18px 20px;
             border-bottom: 1px solid var(--border);
+            flex: 0 0 auto;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 16px;
         }
 
         .modal-header h2 {
@@ -1667,10 +1682,33 @@
             line-height: 1.2;
         }
 
+        .modal-close {
+            width: 32px;
+            height: 32px;
+            min-width: 32px;
+            border: 0;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--muted);
+            display: grid;
+            place-items: center;
+            font-size: 25px;
+            line-height: 1;
+            cursor: pointer;
+        }
+
+        .modal-close:hover {
+            background: var(--surface-muted);
+            color: var(--navy);
+        }
+
         .modal-body {
             padding: 18px 20px;
             display: grid;
             gap: 14px;
+            min-height: 0;
+            overflow-y: auto;
+            overscroll-behavior: contain;
         }
 
         .field label {
@@ -1897,10 +1935,13 @@
         }
 
         .modal-actions {
-            padding: 0 20px 18px;
+            padding: 14px 20px 18px;
+            border-top: 1px solid var(--border);
             display: flex;
             justify-content: flex-end;
             gap: 10px;
+            flex: 0 0 auto;
+            background: var(--surface);
         }
 
         @media (max-width: 768px) {
@@ -2214,6 +2255,7 @@
         <form class="modal" id="contact-form">
             <div class="modal-header">
                 <h2>Guardar contacto</h2>
+                <button class="modal-close" type="button" onclick="closeContactModal()" aria-label="Cerrar">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="field">
@@ -2236,12 +2278,10 @@
         <div class="modal large">
             <div class="modal-header">
                 <h2>Contactos</h2>
+                <button class="modal-close" type="button" onclick="closeContactsModal()" aria-label="Cerrar">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="template-list" id="contacts-modal-list"></div>
-            </div>
-            <div class="modal-actions">
-                <button class="secondary-btn" type="button" onclick="closeContactsModal()">Cerrar</button>
             </div>
         </div>
     </div>
@@ -2250,6 +2290,7 @@
         <form class="modal large" id="template-form">
             <div class="modal-header">
                 <h2>Plantillas de respuesta</h2>
+                <button class="modal-close" type="button" onclick="closeTemplatesModal()" aria-label="Cerrar">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="template-list" id="template-list"></div>
@@ -2263,7 +2304,6 @@
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="secondary-btn" type="button" onclick="closeTemplatesModal()">Cerrar</button>
                 <button class="primary-btn" id="template-submit-btn" type="submit">Agregar plantilla</button>
             </div>
         </form>
@@ -2273,6 +2313,7 @@
         <form class="modal" id="absence-form">
             <div class="modal-header">
                 <h2>Auto-respuesta</h2>
+                <button class="modal-close" type="button" onclick="closeAbsenceModal()" aria-label="Cerrar">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="toggle-row">
@@ -2302,6 +2343,7 @@
         <div class="modal">
             <div class="modal-header">
                 <h2>Llamada por WhatsApp</h2>
+                <button class="modal-close" type="button" onclick="closeCallModal()" aria-label="Cerrar">&times;</button>
             </div>
             <div class="modal-body">
                 <div class="call-status-card">
@@ -2311,7 +2353,6 @@
                 </div>
             </div>
             <div class="modal-actions">
-                <button class="secondary-btn" type="button" onclick="closeCallModal()">Cerrar</button>
                 <button class="danger-btn" type="button" id="call-end-btn" onclick="endWhatsAppCall()" disabled>Colgar</button>
             </div>
         </div>
@@ -2349,9 +2390,17 @@
         const DEFAULT_EMBEDDED_AGENT = { username: 'danaconnect-user', name: 'Usuario DANAConnect' };
         const DEMO_AGENTS = {
             ssalas: { username: 'ssalas', name: 'Sarina Salas', password: 'Dana-2026-B!' },
-            murquiola: { username: 'murquiola', name: 'M. Urquiola', password: 'Dana-2026-C!' },
+            murquiola: { username: 'murquiola', name: 'Mv Urquiola', password: 'Dana-2026-C!' },
         };
-        const QUICK_EMOJIS = ['👍', '🙏', '😊', '✅', '📌', '📄', '📍', '⏳', '🙌', '👋', '🚚', '📦', '🔄', '📸', '☎️', '💬'];
+        const QUICK_EMOJIS = [
+            '👋', '😊', '🙂', '🙌', '🙏', '👍', '👎', '👏',
+            '✅', '☑️', '❌', '⚠️', 'ℹ️', '🔔', '📌', '⏳',
+            '🕐', '📅', '📆', '☎️', '📞', '💬', '📧', '📲',
+            '🏦', '💳', '💵', '💰', '🧾', '📊', '📈', '📉',
+            '🔐', '🔒', '🔑', '🛡️', '👤', '👥', '🪪', '✍️',
+            '📄', '📑', '📋', '📝', '📎', '📁', '📤', '📥',
+            '🔍', '📍', '🌐', '🔗', '📸', '🖼️', '🔄', '➡️'
+        ];
         const DEFAULT_TEMPLATES = [
             {
                 title: 'Saludo inicial',
