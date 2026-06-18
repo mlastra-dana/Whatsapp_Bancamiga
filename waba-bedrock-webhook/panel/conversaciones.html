@@ -3,9 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ChattLogger — DANAConnect</title>
-    <link rel="icon" type="image/png" href="assets/brand/Dana-favicon.png">
-    <link rel="apple-touch-icon" href="assets/brand/Dana-favicon.png">
+    <title>DANAConnect — ChattLogger</title>
+    <link rel="icon" type="image/png" href="assets/brand/dana-favicon-new.png">
+    <link rel="apple-touch-icon" href="assets/brand/dana-favicon-new.png">
     <style>
         :root {
             --violet: #F05A28;
@@ -2390,7 +2390,7 @@
         const DEFAULT_EMBEDDED_AGENT = { username: 'danaconnect-user', name: 'Usuario DANAConnect' };
         const DEMO_AGENTS = {
             ssalas: { username: 'ssalas', name: 'Sarina Salas', password: 'S@l4s#82Qv!6' },
-            murquiola: { username: 'murquiola', name: 'Mv Urquiola', password: 'Urq!7mP#49Zx' },
+            murquiola: { username: 'murquiola', name: 'MV. Urquiola', password: 'Urq!7mP#49Zx' },
         };
         const QUICK_EMOJIS = [
             '👋', '😊', '🙂', '🙌', '🙏', '👍', '👎', '👏',
@@ -4129,8 +4129,8 @@
         function updateUnreadTitle() {
             const total = getTotalUnreadCount();
             document.title = total > 0
-                ? `(${total > 99 ? '99+' : total}) ChattLogger - DANAConnect`
-                : 'ChattLogger - DANAConnect';
+                ? `(${total > 99 ? '99+' : total}) DANAConnect - ChattLogger`
+                : 'DANAConnect - ChattLogger';
         }
 
         function markContactRead(phone) {
