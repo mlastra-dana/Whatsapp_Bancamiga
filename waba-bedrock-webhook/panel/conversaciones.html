@@ -4221,6 +4221,14 @@
             return `"${String(value ?? '').replace(/"/g, '""')}"`;
         }
 
+        function safeFilenamePart(value, fallback = 'contacto') {
+            const cleaned = String(value || '')
+                .replace(/[<>:"/\\|?*\u0000-\u001F]/g, '-')
+                .replace(/[. ]+$/g, '')
+                .trim();
+            return cleaned || fallback;
+        }
+
         function exportHistory(format) {
             const exportMenu = document.getElementById('export-menu');
             if (exportMenu) exportMenu.removeAttribute('open');
@@ -4235,8 +4243,12 @@
                 normalizePhone(message.phone_number) === selectedPhoneNormalized &&
                 isMessageInDateRange(message)
             );
-            const suffix = [
+            const contactFilename = safeFilenamePart(
+                getContactName(selectedPhone),
                 selectedPhoneNormalized,
+            );
+            const suffix = [
+                contactFilename,
                 dateFrom || 'inicio',
                 dateTo || 'hoy',
             ].join('_');
