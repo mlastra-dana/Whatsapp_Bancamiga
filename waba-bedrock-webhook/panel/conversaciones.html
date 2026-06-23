@@ -4224,9 +4224,22 @@
         function exportHistory(format) {
             const exportMenu = document.getElementById('export-menu');
             if (exportMenu) exportMenu.removeAttribute('open');
+            if (!selectedPhone) {
+                alert('Selecciona una conversación antes de exportar.');
+                return;
+            }
+
             syncDateFilters();
-            const messages = getFilteredMessages();
-            const suffix = [dateFrom || 'inicio', dateTo || 'hoy'].join('_');
+            const selectedPhoneNormalized = normalizePhone(selectedPhone);
+            const messages = allMessages.filter(message =>
+                normalizePhone(message.phone_number) === selectedPhoneNormalized &&
+                isMessageInDateRange(message)
+            );
+            const suffix = [
+                selectedPhoneNormalized,
+                dateFrom || 'inicio',
+                dateTo || 'hoy',
+            ].join('_');
 
             if (format === 'json') {
                 downloadFile(
