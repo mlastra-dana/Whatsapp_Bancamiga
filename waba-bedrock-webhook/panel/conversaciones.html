@@ -87,6 +87,20 @@
             margin-bottom: 8px;
         }
 
+        .login-country {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 30px;
+            padding: 5px 12px;
+            border: 1px solid #e2e2e2;
+            border-radius: 999px;
+            background: #fafafa;
+            color: #555555;
+            font-size: 13px;
+            font-weight: 800;
+        }
+
         .login-company {
             color: #727272;
             font-size: 18px;
@@ -1985,6 +1999,7 @@
                 <div class="login-brand">
                     <img class="login-logo" src="assets/brand/logo-danaconnect-horizontal.jpg" alt="DANAConnect">
                     <div class="login-welcome">Welcome to DANAConnect</div>
+                    <div class="login-country" aria-label="Ambiente Venezuela">🇻🇪 Venezuela</div>
                 </div>
                 <form class="login-form" id="login-form">
                     <div class="login-field">
@@ -2220,6 +2235,7 @@
                             <span class="chat-subtitle" id="chat-subtitle"></span>
                         </div>
                         <div class="row-actions">
+                            <button class="secondary-btn call-btn" type="button" onclick="startWhatsAppCall()">Llamar</button>
                             <button class="secondary-btn" id="edit-contact-btn" onclick="openContactModal()" style="display:none;">Guardar contacto</button>
                         </div>
                     </div>

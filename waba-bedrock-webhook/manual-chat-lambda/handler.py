@@ -538,7 +538,7 @@ def can_start_business_call(permission_response):
 
     for item in candidates:
         status = normalize_text(item.get("status") or item.get("call_permission_status") or item.get("permission_status"))
-        if status in {"granted", "allowed", "active", "permanent", "temporary"}:
+        if status in {"granted", "allowed", "active", "permanent", "temporary", "accepted", "approved", "enabled", "available"}:
             return True
         actions = item.get("actions") or item.get("available_actions") or {}
         if isinstance(actions, dict):
@@ -552,6 +552,20 @@ def can_start_business_call(permission_response):
             if item.get(key) is True:
                 return True
     return False
+
+
+def is_call_permission_limit_error(error_body):
+    text = str(error_body or "")
+    if "138009" in text or "Limit reached for call permission request" in text:
+        return True
+
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return False
+
+    error = data.get("error") if isinstance(data, dict) else {}
+    return isinstance(error, dict) and str(error.get("code") or "") == "138009"
 
 
 def request_call_permission_message(telefono):
@@ -611,6 +625,15 @@ def request_whatsapp_call_permission(event):
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
         logger.error("WhatsApp call permission failed status=%s body=%s", exc.code, error_body[:5000])
+        if is_call_permission_limit_error(error_body):
+            return response(200, {
+                "success": True,
+                "can_call": True,
+                "permission_limit_reached": True,
+                "message": "Call permission request limit reached; trying direct call because the user may have already accepted.",
+                "error": error_body,
+                "permission": permission_response,
+            })
         return response(exc.code, {"error": error_body, "permission": permission_response})
 
 
