@@ -3052,10 +3052,16 @@
         function isAnswerableCall(message) {
             const detail = String(message.message || '');
             const payload = message.call_payload || {};
+            const callDirection = String(payload.direction || '').toUpperCase();
+            const callEvent = String(payload.event || '').toLowerCase();
+            const session = payload.session && typeof payload.session === 'object' ? payload.session : {};
+            const sdpType = String(session.sdp_type || '').toLowerCase();
             const callId = message.call_id || extractCallId(payload);
-            const offerSdp = extractSdpOffer(payload);
+            const offerSdp = sdpType === 'offer' ? String(session.sdp || '').trim() : '';
             return (
                 message.direction === 'inbound' &&
+                callDirection === 'USER_INITIATED' &&
+                callEvent === 'connect' &&
                 callId &&
                 offerSdp &&
                 /\[Llamada\]:\s*connect/i.test(detail) &&
@@ -3078,7 +3084,7 @@
 
         function reconcilePendingIncomingCall() {
             if (!pendingIncomingCall) return;
-            if (hasTerminalCallEvent(pendingIncomingCall.callId, pendingIncomingCall.phone)) {
+            if (hasTerminalCallEvent(pendingIncomingCall.callId)) {
                 clearIncomingCallToast();
                 return;
             }
@@ -3088,6 +3094,52 @@
                 return messageCallId === pendingIncomingCall.callId && isAnswerableCall(message);
             });
             if (!stillAnswerable) clearIncomingCallToast();
+        }
+
+        async function reconcileActiveCallFromWebhookEvents() {
+            if (!activeCall?.callId || !activeCall.peerConnection) return;
+
+            const relatedMessages = allMessages.filter(message => {
+                const messageCallId = message.call_id || extractCallId(message.call_payload || {});
+                return messageCallId === activeCall.callId;
+            });
+            if (!relatedMessages.length) return;
+
+            const terminalMessage = relatedMessages.find(message => isTerminalCallMessage(message, activeCall.callId));
+            if (terminalMessage) {
+                const detail = formatCallDetail(String(terminalMessage.message || '').replace(/^\[Llamada\]:\s*/i, ''), terminalMessage);
+                cleanupActiveCall();
+                setCallStatus('Llamada finalizada', detail, '', 'live');
+                setTimeout(() => {
+                    if (!activeCall) closeCallModal();
+                }, 900);
+                return;
+            }
+
+            if (activeCall.peerConnection.remoteDescription) return;
+
+            const answerMessage = relatedMessages.find(message => extractSdpAnswer(message.call_payload || {}));
+            const answerSdp = answerMessage ? extractSdpAnswer(answerMessage.call_payload || {}) : '';
+            if (!answerSdp) return;
+
+            try {
+                await activeCall.peerConnection.setRemoteDescription({ type: 'answer', sdp: answerSdp });
+                activeCall.remoteAudio?.play?.().catch(() => {});
+                setCallStatus(
+                    'Llamada activa',
+                    `Conectando con ${getContactName(activeCall.phone) || activeCall.phone}`,
+                    'Esperando audio...',
+                    'live'
+                );
+            } catch (error) {
+                console.warn('Could not apply remote call answer:', error);
+                setCallStatus(
+                    'Llamada sin audio',
+                    'La llamada fue aceptada, pero no pudimos completar la sesión de audio.',
+                    friendlyCallError(error.message),
+                    'error'
+                );
+            }
         }
 
         function formatDuration(seconds) {
@@ -4329,6 +4381,7 @@
                 previousMessageCount = inboundMessages.length;
                 firstConversationLoad = false;
                 reconcilePendingIncomingCall();
+                await reconcileActiveCallFromWebhookEvents();
 
                 await loadBackendReadStateIfDue();
                 processMessages();

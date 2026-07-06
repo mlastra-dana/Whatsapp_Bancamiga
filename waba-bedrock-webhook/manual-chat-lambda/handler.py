@@ -163,6 +163,35 @@ def normalize_phone(value):
     return "".join(char for char in str(value or "") if char.isdigit())
 
 
+def get_business_phone_from_webhook(value):
+    metadata = value.get("metadata") if isinstance(value, dict) and isinstance(value.get("metadata"), dict) else {}
+    return normalize_phone(
+        os.environ.get("WHATSAPP_BUSINESS_NUMBER")
+        or os.environ.get("BUSINESS_PHONE_NUMBER")
+        or metadata.get("display_phone_number")
+        or metadata.get("phone_number")
+    )
+
+
+def get_call_counterparty_phone(call, fallback_phone, business_phone, call_direction):
+    from_phone = normalize_phone(call.get("from"))
+    to_phone = normalize_phone(call.get("to"))
+    wa_phone = normalize_phone(call.get("wa_id"))
+
+    if business_phone:
+        if from_phone and from_phone != business_phone:
+            return from_phone
+        if to_phone and to_phone != business_phone:
+            return to_phone
+
+    if call_direction == "BUSINESS_INITIATED":
+        return to_phone or wa_phone or fallback_phone
+    if call_direction == "USER_INITIATED":
+        return from_phone or wa_phone or fallback_phone
+
+    return from_phone or to_phone or wa_phone or fallback_phone
+
+
 def list_contacts(event):
     contacts = []
     scan_kwargs = {}
@@ -554,18 +583,28 @@ def can_start_business_call(permission_response):
     return False
 
 
-def is_call_permission_limit_error(error_body):
+def get_reusable_call_permission_reason(error_body):
     text = str(error_body or "")
     if "138009" in text or "Limit reached for call permission request" in text:
-        return True
+        return "permission_limit_reached"
+    if "138017" in text or "can already call this consumer" in text:
+        return "permission_already_available"
 
     try:
         data = json.loads(text)
     except json.JSONDecodeError:
-        return False
+        return ""
 
     error = data.get("error") if isinstance(data, dict) else {}
-    return isinstance(error, dict) and str(error.get("code") or "") == "138009"
+    if not isinstance(error, dict):
+        return ""
+
+    code = str(error.get("code") or "")
+    if code == "138009":
+        return "permission_limit_reached"
+    if code == "138017":
+        return "permission_already_available"
+    return ""
 
 
 def request_call_permission_message(telefono):
@@ -625,12 +664,13 @@ def request_whatsapp_call_permission(event):
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
         logger.error("WhatsApp call permission failed status=%s body=%s", exc.code, error_body[:5000])
-        if is_call_permission_limit_error(error_body):
+        reusable_reason = get_reusable_call_permission_reason(error_body)
+        if reusable_reason:
             return response(200, {
                 "success": True,
                 "can_call": True,
-                "permission_limit_reached": True,
-                "message": "Call permission request limit reached; trying direct call because the user may have already accepted.",
+                reusable_reason: True,
+                "message": "Call permission is already reusable; trying direct call.",
                 "error": error_body,
                 "permission": permission_response,
             })
@@ -1199,19 +1239,21 @@ def handle_call_webhook(value):
     fallback_phone = ""
     if contacts:
         fallback_phone = normalize_phone(contacts[0].get("wa_id") or contacts[0].get("input"))
+    business_phone = get_business_phone_from_webhook(value)
 
     for call in calls:
         if not isinstance(call, dict):
             continue
-        telefono = normalize_phone(
-            call.get("from")
-            or call.get("to")
-            or call.get("wa_id")
-            or fallback_phone
-        )
+        call_direction = str(call.get("direction") or "").upper()
+        telefono = get_call_counterparty_phone(call, fallback_phone, business_phone, call_direction)
+        if call_direction == "BUSINESS_INITIATED":
+            direction = "salida"
+        elif call_direction == "USER_INITIATED":
+            direction = "entrada"
+        else:
+            direction = "entrada" if call.get("from") else "salida"
         if not telefono:
             continue
-        direction = "entrada" if call.get("from") else "salida"
         guardar_evento_llamada(
             telefono,
             describe_call_event(call),
