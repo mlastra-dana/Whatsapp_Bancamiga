@@ -2958,6 +2958,7 @@
             if (typeof value === 'object') {
                 const sdpType = String(value.sdp_type || value.type || '').toLowerCase();
                 if (value.sdp && (!sdpType || sdpType === 'answer')) return String(value.sdp);
+                if (value.sdp && sdpType && sdpType !== 'answer') return '';
                 for (const nested of Object.values(value)) {
                     const found = extractSdpAnswer(nested);
                     if (found) return found;
@@ -2979,6 +2980,7 @@
             if (typeof value === 'object') {
                 const sdpType = String(value.sdp_type || value.type || '').toLowerCase();
                 if (value.sdp && (!sdpType || sdpType === 'offer')) return String(value.sdp);
+                if (value.sdp && sdpType && sdpType !== 'offer') return '';
                 for (const nested of Object.values(value)) {
                     const found = extractSdpOffer(nested);
                     if (found) return found;
