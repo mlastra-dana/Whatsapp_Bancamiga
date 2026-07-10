@@ -39,6 +39,7 @@ DEFAULT_ABSENCE_MESSAGE = (
 dynamodb = boto3.resource("dynamodb")
 state_table = dynamodb.Table(STATE_TABLE_NAME)
 conversations_table = dynamodb.Table(CONVERSATIONS_TABLE_NAME) if CONVERSATIONS_TABLE_NAME else None
+template_definition_cache = {}
 
 
 def response(status_code: int, body: Any, content_type: str = "application/json") -> dict:
@@ -955,6 +956,99 @@ def get_template_header_image_url(body, sent_template, template_definition):
     return ""
 
 
+def get_sent_template_button_params(sent_template):
+    sent_components = sent_template.get("components") if isinstance(sent_template, dict) else []
+    buttons = {}
+
+    if not isinstance(sent_components, list):
+        return buttons
+
+    for component in sent_components:
+        if not isinstance(component, dict):
+            continue
+        if str(component.get("type") or "").lower() != "button":
+            continue
+
+        index = str(component.get("index") if component.get("index") is not None else len(buttons))
+        parameters = component.get("parameters") if isinstance(component.get("parameters"), list) else []
+        dynamic_value = ""
+        for parameter in parameters:
+            if not isinstance(parameter, dict):
+                continue
+            if str(parameter.get("type") or "").lower() == "text":
+                dynamic_value = str(parameter.get("text") or "").strip()
+                break
+
+        buttons[index] = {
+            "index": index,
+            "type": str(component.get("sub_type") or "").upper(),
+            "text": "",
+            "url": "",
+            "phone_number": "",
+            "value": dynamic_value,
+        }
+
+    return buttons
+
+
+def resolve_template_button_url(url, dynamic_value):
+    clean_url = str(url or "").strip()
+    clean_value = str(dynamic_value or "").strip()
+
+    if not clean_url:
+        return clean_value if clean_value.startswith(("http://", "https://")) else ""
+    if clean_value:
+        return re.sub(r"\{\{\s*\d+\s*\}\}", clean_value, clean_url)
+    return clean_url
+
+
+def get_template_button_actions(sent_template, template_definition):
+    sent_buttons = get_sent_template_button_params(sent_template)
+    actions = []
+
+    meta_components = template_definition.get("components") if isinstance(template_definition, dict) else []
+    if isinstance(meta_components, list):
+        for component in meta_components:
+            if not isinstance(component, dict):
+                continue
+            if str(component.get("type") or "").upper() != "BUTTONS":
+                continue
+
+            meta_buttons = component.get("buttons") if isinstance(component.get("buttons"), list) else []
+            for index, button in enumerate(meta_buttons):
+                if not isinstance(button, dict):
+                    continue
+                key = str(index)
+                sent = sent_buttons.pop(key, {})
+                dynamic_value = sent.get("value") or ""
+                button_type = str(button.get("type") or sent.get("type") or "").upper()
+                text = str(button.get("text") or "").strip()
+                url = resolve_template_button_url(button.get("url"), dynamic_value)
+
+                actions.append({
+                    "index": key,
+                    "type": button_type,
+                    "text": text or "Abrir enlace" if button_type == "URL" else text or "Opcion",
+                    "url": url,
+                    "phone_number": str(button.get("phone_number") or "").strip(),
+                    "value": dynamic_value,
+                })
+
+    for key, sent in sent_buttons.items():
+        button_type = str(sent.get("type") or "").upper()
+        value = str(sent.get("value") or "").strip()
+        actions.append({
+            "index": key,
+            "type": button_type,
+            "text": "Abrir enlace" if button_type == "URL" else "Opcion",
+            "url": resolve_template_button_url("", value),
+            "phone_number": "",
+            "value": value,
+        })
+
+    return actions[:3]
+
+
 def fetch_meta_template(template_id):
     if not WHATSAPP_TOKEN:
         logger.warning("WHATSAPP_TOKEN/WHATSAPP_ACCESS_TOKEN is not configured; cannot fetch template")
@@ -979,6 +1073,15 @@ def fetch_meta_template(template_id):
     return {}
 
 
+def fetch_meta_template_cached(template_id):
+    clean_template_id = str(template_id or "").strip()
+    if not clean_template_id:
+        return {}
+    if clean_template_id not in template_definition_cache:
+        template_definition_cache[clean_template_id] = fetch_meta_template(clean_template_id)
+    return template_definition_cache.get(clean_template_id) or {}
+
+
 def guardar_template_dana(event):
     if conversations_table is None:
         return response(500, {"error": "CONVERSATIONS_TABLE_NAME is not configured"})
@@ -1001,12 +1104,10 @@ def guardar_template_dana(event):
     timestamp = str(body.get("sent_at") or now_iso())
     mensaje = strip_gateway_status_prefix(body.get("message"))
     template_id = body.get("template_id") or body.get("meta_template_id")
+    meta_template = fetch_meta_template_cached(template_id) if template_id else {}
 
-    if not mensaje and template_id:
-        meta_template = fetch_meta_template(template_id)
+    if not mensaje and meta_template:
         mensaje = get_template_body_text(meta_template)
-    else:
-        meta_template = {}
 
     mensaje = format_template_message_text(mensaje)
 
@@ -1015,6 +1116,7 @@ def guardar_template_dana(event):
         mensaje = f"[Imagen]: {image_url}\n\n{mensaje}".strip()
 
     mensaje = str(mensaje or f"[Plantilla]: {template_name}")[:5000]
+    template_buttons = get_template_button_actions(template, meta_template)
 
     conversations_table.put_item(
         Item={
@@ -1028,6 +1130,7 @@ def guardar_template_dana(event):
             "source_flow": body.get("source_flow") or "",
             "template_name": template_name,
             "template_id": str(template_id or ""),
+            "template_buttons": template_buttons,
             "template_payload": body,
         }
     )
@@ -1038,6 +1141,15 @@ def guardar_template_dana(event):
 def normalizar_log_para_panel(item):
     tipo = item.get("tipo") or item.get("direction") or "entrada"
     direction = "outbound" if tipo in {"salida", "outbound", "manual"} else "inbound"
+    template_payload = item.get("template_payload") or {}
+    sent_template = template_payload.get("template") if isinstance(template_payload, dict) else {}
+    template_buttons = item.get("template_buttons") or []
+    template_id = item.get("template_id") or ""
+    if not template_buttons and template_id and isinstance(sent_template, dict):
+        template_buttons = get_template_button_actions(
+            sent_template,
+            fetch_meta_template_cached(template_id),
+        )
     return {
         "phone_number": item.get("telefono") or item.get("phone_number") or "",
         "timestamp": item.get("timestamp", ""),
@@ -1049,6 +1161,11 @@ def normalizar_log_para_panel(item):
         "agent_name": item.get("agent_name") or "",
         "call_id": item.get("call_id") or "",
         "call_payload": item.get("call_payload") or {},
+        "template_name": item.get("template_name") or "",
+        "template_id": template_id,
+        "source_flow": item.get("source_flow") or "",
+        "template_buttons": template_buttons,
+        "template_payload": template_payload,
     }
 
 
@@ -1154,6 +1271,11 @@ def extraer_mensaje(msg):
         audio_url = obtener_url_media(audio_id) if audio_id else ""
         return f"[Audio]: {audio_url}", "audio"
 
+    if msg_type == "sticker":
+        sticker_id = msg.get("sticker", {}).get("id")
+        sticker_url = obtener_url_media(sticker_id) if sticker_id else ""
+        return f"[Sticker]: {sticker_url}", "sticker"
+
     if msg_type == "document":
         document = msg.get("document", {})
         document_id = document.get("id")
@@ -1172,6 +1294,40 @@ def extraer_mensaje(msg):
         lng = location.get("longitude", "")
         name = location.get("name") or location.get("address") or ""
         return f"[Ubicacion]: {lat}, {lng} {name}".strip(), "location"
+
+    if msg_type == "contacts":
+        contacts = msg.get("contacts") if isinstance(msg.get("contacts"), list) else []
+        lines = []
+        for contact in contacts[:5]:
+            if not isinstance(contact, dict):
+                continue
+            name_data = contact.get("name") if isinstance(contact.get("name"), dict) else {}
+            display_name = str(
+                name_data.get("formatted_name")
+                or " ".join(
+                    part for part in [
+                        str(name_data.get("first_name") or "").strip(),
+                        str(name_data.get("last_name") or "").strip(),
+                    ]
+                    if part
+                )
+                or "Contacto"
+            ).strip()
+            phones = contact.get("phones") if isinstance(contact.get("phones"), list) else []
+            phone_values = []
+            for phone in phones[:3]:
+                if not isinstance(phone, dict):
+                    continue
+                phone_value = str(phone.get("wa_id") or phone.get("phone") or "").strip()
+                if phone_value:
+                    phone_values.append(phone_value)
+            line = display_name
+            if phone_values:
+                line = f"{line} | {', '.join(phone_values)}"
+            lines.append(line)
+        if lines:
+            return "[Contacto]: " + "\n".join(lines), "contacts"
+        return "[Contacto]: Contacto recibido", "contacts"
 
     return "[Mensaje no soportado]", msg_type or "unknown"
 
