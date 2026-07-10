@@ -1147,11 +1147,16 @@
             flex-direction: column;
         }
 
+        .composer-panel {
+            border-top: 1px solid var(--border);
+            background: var(--surface);
+            flex: 0 0 auto;
+        }
+
         .chat-input {
             display: flex;
             gap: 8px;
-            padding: 10px 14px;
-            border-top: 1px solid var(--border);
+            padding: 10px 14px 12px;
         }
 
         .composer-wrap {
@@ -1228,9 +1233,11 @@
         .template-strip {
             display: none;
             gap: 8px;
-            padding: 9px 14px 0;
-            border-top: 1px solid var(--border);
+            padding: 9px 14px;
             overflow-x: auto;
+            min-height: 48px;
+            align-items: center;
+            border-bottom: 1px solid var(--border);
         }
 
         .template-chip {
@@ -1261,7 +1268,7 @@
             border-radius: 18px;
             font-size: 14px;
             outline: none;
-            resize: vertical;
+            resize: none;
             font-family: inherit;
         }
 
@@ -2227,14 +2234,16 @@
                     <div class="chat-messages" id="chat-messages">
                         <div class="empty-state"></div>
                     </div>
-                    <div class="template-strip" id="template-strip"></div>
-                    <div class="chat-input" id="chat-input" style="display:none;">
-                        <div class="composer-wrap">
-                            <button class="emoji-toggle" type="button" id="emoji-toggle" onclick="toggleEmojiPicker()" aria-label="Abrir emojis">☺</button>
-                            <textarea id="message-input" placeholder=""></textarea>
-                            <div class="emoji-picker" id="emoji-picker" aria-label="Emojis rápidos"></div>
+                    <div class="composer-panel" id="composer-panel" style="display:none;">
+                        <div class="template-strip" id="template-strip"></div>
+                        <div class="chat-input" id="chat-input">
+                            <div class="composer-wrap">
+                                <button class="emoji-toggle" type="button" id="emoji-toggle" onclick="toggleEmojiPicker()" aria-label="Abrir emojis">☺</button>
+                                <textarea id="message-input" placeholder=""></textarea>
+                                <div class="emoji-picker" id="emoji-picker" aria-label="Emojis rápidos"></div>
+                            </div>
+                            <button class="primary-btn" onclick="sendMessage()" id="send-btn">Enviar</button>
                         </div>
-                        <button class="primary-btn" onclick="sendMessage()" id="send-btn">Enviar</button>
                     </div>
                     <div class="send-status" id="send-status"></div>
                 </div>
@@ -2279,7 +2288,16 @@
         <div class="modal large">
             <div class="modal-header">
                 <h2>Contactos</h2>
-                <button class="modal-close" type="button" onclick="closeContactsModal()" aria-label="Cerrar">&times;</button>
+                <div class="row-actions">
+                    <details class="export-menu" id="contacts-export-menu">
+                        <summary class="secondary-btn">Exportar</summary>
+                        <div class="export-options">
+                            <button class="secondary-btn" type="button" onclick="exportContacts('csv')">CSV</button>
+                            <button class="secondary-btn" type="button" onclick="exportContacts('json')">JSON</button>
+                        </div>
+                    </details>
+                    <button class="modal-close" type="button" onclick="closeContactsModal()" aria-label="Cerrar">&times;</button>
+                </div>
             </div>
             <div class="modal-body">
                 <div class="template-list" id="contacts-modal-list"></div>
@@ -2662,7 +2680,7 @@
             searchTerm = '';
             document.getElementById('search-input').value = '';
             document.getElementById('chat-header-bar').style.display = 'none';
-            document.getElementById('chat-input').style.display = 'none';
+            document.getElementById('composer-panel').style.display = 'none';
             document.getElementById('template-strip').style.display = 'none';
             document.getElementById('edit-contact-btn').style.display = 'none';
             document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
@@ -3189,10 +3207,16 @@
             return { peerConnection, remoteAudio, remoteStream };
         }
 
-        async function ensureBusinessCallPermission(phone) {
+        function wait(ms) {
+            return new Promise(resolve => setTimeout(resolve, ms));
+        }
+
+        async function ensureBusinessCallPermission(phone, options = {}) {
             if (!CALL_PERMISSION_API_URL) return { can_call: true };
 
-            setCallStatus('Validando permiso', `Revisando si podemos llamar a ${getContactName(phone) || phone}`, 'Consultando permisos de WhatsApp...');
+            if (!options.silent) {
+                setCallStatus('Validando permiso', `Revisando si podemos llamar a ${getContactName(phone) || phone}`, 'Consultando permisos de WhatsApp...');
+            }
             const response = await fetch(CALL_PERMISSION_API_URL, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
@@ -3200,11 +3224,47 @@
                     phone,
                     agent_username: currentAgent.username,
                     agent_name: currentAgent.name,
+                    check_only: Boolean(options.checkOnly),
                 }),
             });
             const data = await response.json().catch(() => ({}));
             if (!response.ok) throw new Error(friendlyCallError(data.error || data));
             return data;
+        }
+
+        function hasAcceptedBusinessCallPermission(phone) {
+            const normalizedPhone = normalizePhone(phone);
+            return allMessages.some(message => {
+                if (normalizePhone(message.phone_number) !== normalizedPhone) return false;
+                const text = String(message.message || '').toLowerCase();
+                return (
+                    /\[llamada\]:\s*permiso de llamada actualizado/.test(text) &&
+                    /\baccept(ed)?\b|acept/.test(text)
+                );
+            });
+        }
+
+        async function waitForBusinessCallPermission(phone) {
+            const maxAttempts = 30;
+            for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+                setCallStatus(
+                    'Esperando autorización',
+                    `Solicitud enviada a ${getContactName(phone) || phone}.`,
+                    'Cuando el cliente acepte en WhatsApp, la llamada iniciará automáticamente.',
+                    'live'
+                );
+                await wait(2000);
+                await loadConversations();
+                if (hasAcceptedBusinessCallPermission(phone)) {
+                    return { can_call: true, permission_accepted_from_webhook: true };
+                }
+                const permission = await ensureBusinessCallPermission(phone, {
+                    checkOnly: true,
+                    silent: true,
+                });
+                if (permission.can_call) return permission;
+            }
+            return { can_call: false, permission_timeout: true };
         }
 
         async function startWhatsAppCall() {
@@ -3223,21 +3283,25 @@
                 const permission = await ensureBusinessCallPermission(selectedPhone);
                 if (!permission.can_call) {
                     if (permission.permission_requested) {
-                        setCallStatus(
-                            'Solicitud enviada',
-                            `Enviamos una solicitud de permiso a ${getContactName(selectedPhone) || selectedPhone}.`,
-                            'Cuando el cliente acepte en WhatsApp, intenta llamar nuevamente desde el panel.',
-                            'live'
-                        );
-                    } else {
+                        const grantedPermission = await waitForBusinessCallPermission(selectedPhone);
+                        if (!grantedPermission.can_call) {
+                            setCallStatus(
+                                'Permiso pendiente',
+                                `La solicitud fue enviada a ${getContactName(selectedPhone) || selectedPhone}.`,
+                                'Cuando el cliente acepte en WhatsApp, presiona llamar nuevamente.',
+                                'live'
+                            );
+                            return;
+                        }
+                    } else if (!permission.can_call) {
                         setCallStatus(
                             'Permiso requerido',
                             'El cliente aún no ha autorizado llamadas salientes del negocio.',
                             'No se inició la llamada.',
                             'error'
                         );
+                        return;
                     }
-                    return;
                 }
 
                 setCallStatus('Preparando llamada', `Llamando a ${getContactName(selectedPhone) || selectedPhone}`, 'Solicitando permiso de micrófono...');
@@ -4241,7 +4305,7 @@
             else {
                 selectedPhone = null;
                 document.getElementById('chat-header-bar').style.display = 'none';
-                document.getElementById('chat-input').style.display = 'none';
+                document.getElementById('composer-panel').style.display = 'none';
                 document.getElementById('template-strip').style.display = 'none';
                 document.getElementById('edit-contact-btn').style.display = 'none';
                 document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
@@ -4250,11 +4314,14 @@
         }
 
         function applySearch() {
-            searchTerm = document.getElementById('search-input').value;
+            searchTerm = document.getElementById('search-input').value.trim();
             renderContacts();
         }
 
         function clearDateFilters() {
+            const searchInput = document.getElementById('search-input');
+            searchInput.value = '';
+            searchTerm = '';
             document.getElementById('date-from').value = '';
             document.getElementById('date-to').value = '';
             applyDateFilters();
@@ -4321,6 +4388,45 @@
             const rows = messages.map(message => headers.map(key => csvValue(message[key])).join(','));
             downloadFile(
                 `historial-chattlogger-${suffix}.csv`,
+                [headers.join(','), ...rows].join('\n'),
+                'text/csv;charset=utf-8',
+            );
+        }
+
+        function getSavedContactsForExport() {
+            return [...savedContacts]
+                .map(contact => ({
+                    name: contact.name || contact.nombre || '',
+                    phone: normalizePhone(contact.phone || contact.telefono),
+                    updated_at: contact.updated_at || '',
+                }))
+                .filter(contact => contact.phone || contact.name)
+                .sort((a, b) => (a.name || a.phone).localeCompare(b.name || b.phone));
+        }
+
+        function exportContacts(format) {
+            const exportMenu = document.getElementById('contacts-export-menu');
+            if (exportMenu) exportMenu.removeAttribute('open');
+
+            const contactsToExport = getSavedContactsForExport();
+            if (contactsToExport.length === 0) {
+                alert('No hay contactos guardados para exportar.');
+                return;
+            }
+
+            if (format === 'json') {
+                downloadFile(
+                    'contactos-chattlogger.json',
+                    JSON.stringify(contactsToExport, null, 2),
+                    'application/json;charset=utf-8',
+                );
+                return;
+            }
+
+            const headers = ['name', 'phone', 'updated_at'];
+            const rows = contactsToExport.map(contact => headers.map(key => csvValue(contact[key])).join(','));
+            downloadFile(
+                'contactos-chattlogger.csv',
                 [headers.join(','), ...rows].join('\n'),
                 'text/csv;charset=utf-8',
             );
@@ -4593,7 +4699,7 @@
             if (!contact) return;
 
             document.getElementById('chat-header-bar').style.display = 'flex';
-            document.getElementById('chat-input').style.display = 'flex';
+            document.getElementById('composer-panel').style.display = 'block';
             renderTemplateChips();
 
             const contactName = getContactName(selectedPhone);
@@ -4742,6 +4848,8 @@
                 applySearch();
             }
         });
+        document.getElementById('search-input').addEventListener('input', applySearch);
+        document.getElementById('search-input').addEventListener('search', applySearch);
         document.getElementById('date-from').addEventListener('change', applyDateFilters);
         document.getElementById('date-to').addEventListener('change', applyDateFilters);
         document.addEventListener('visibilitychange', () => {

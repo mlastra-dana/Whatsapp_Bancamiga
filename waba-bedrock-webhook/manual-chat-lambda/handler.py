@@ -630,6 +630,7 @@ def request_whatsapp_call_permission(event):
     telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
     agent_username = str(body.get("agent_username") or "").strip()
     agent_name = str(body.get("agent_name") or agent_username or "").strip()
+    check_only = bool(body.get("check_only", False))
 
     if not telefono:
         return response(400, {"error": "phone is required"})
@@ -641,6 +642,13 @@ def request_whatsapp_call_permission(event):
             return response(200, {
                 "success": True,
                 "can_call": True,
+                "permission": permission_response,
+            })
+
+        if check_only:
+            return response(200, {
+                "success": True,
+                "can_call": False,
                 "permission": permission_response,
             })
 
@@ -1110,10 +1118,24 @@ def extraer_mensaje(msg):
 
     if msg_type == "interactive":
         interactive = msg.get("interactive", {})
-        if interactive.get("type") == "button_reply":
+        interactive_type = str(interactive.get("type") or "").strip()
+        if interactive_type == "button_reply":
             return interactive.get("button_reply", {}).get("title", ""), "interactive"
-        if interactive.get("type") == "list_reply":
+        if interactive_type == "list_reply":
             return interactive.get("list_reply", {}).get("title", ""), "interactive"
+        if "call_permission" in interactive_type:
+            permission_payload = interactive.get(interactive_type)
+            status = ""
+            if isinstance(permission_payload, dict):
+                status = str(
+                    permission_payload.get("response")
+                    or permission_payload.get("status")
+                    or permission_payload.get("action")
+                    or ""
+                ).strip()
+            detail = f" {status}" if status else ""
+            return f"[Llamada]: permiso de llamada actualizado{detail}", "call"
+        return "[Respuesta interactiva]", "interactive"
 
     if msg_type == "button":
         return msg.get("button", {}).get("text", ""), "button"
@@ -1279,6 +1301,8 @@ def handle_whatsapp_webhook(event):
         telefono = msg["from"]
         mensaje, msg_type = extraer_mensaje(msg)
         guardar_mensaje(telefono, mensaje, "entrada", msg_type)
+        if msg_type == "call":
+            return response(200, {"success": True, "mode": "call_message"})
 
     except Exception:
         logger.exception("Could not parse WhatsApp webhook")
