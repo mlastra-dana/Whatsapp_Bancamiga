@@ -26,6 +26,7 @@ CONVERSATIONS_TABLE_NAME = os.environ.get("CONVERSATIONS_TABLE_NAME", "chat-logs
 CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
 MAX_MEDIA_BYTES = int(os.environ.get("MAX_MEDIA_BYTES", str(10 * 1024 * 1024)))
+MAX_UPLOAD_MEDIA_BYTES = int(os.environ.get("MAX_UPLOAD_MEDIA_BYTES", str(5 * 1024 * 1024)))
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
 TEMPLATES_STATE_KEY = "__quick_templates__"
 CONTACT_KEY_PREFIX = "contact#"
@@ -1189,6 +1190,56 @@ def enviar_whatsapp(telefono, mensaje):
         return json.loads(res.read().decode("utf-8") or "{}")
 
 
+def upload_media_to_meta(data, filename, mime_type):
+    if not WHATSAPP_TOKEN or not PHONE_NUMBER_ID:
+        raise RuntimeError("Missing WHATSAPP_TOKEN/PHONE_NUMBER_ID environment variables")
+
+    boundary = f"----chattlogger{datetime.now(timezone.utc).timestamp()}".replace(".", "")
+    safe_filename = str(filename or "archivo").replace('"', "").replace("\r", "").replace("\n", "")[:180]
+    content_type = str(mime_type or "application/octet-stream").replace("\r", "").replace("\n", "")[:120]
+
+    parts = [
+        f"--{boundary}\r\n"
+        'Content-Disposition: form-data; name="messaging_product"\r\n\r\n'
+        "whatsapp\r\n",
+        f"--{boundary}\r\n"
+        f'Content-Disposition: form-data; name="file"; filename="{safe_filename}"\r\n'
+        f"Content-Type: {content_type}\r\n\r\n",
+    ]
+    body = b"".join(part.encode("utf-8") for part in parts) + data + f"\r\n--{boundary}--\r\n".encode("utf-8")
+
+    url = f"https://graph.facebook.com/{GRAPH_API_VERSION}/{PHONE_NUMBER_ID}/media"
+    req = urllib.request.Request(url, method="POST")
+    req.add_header("Content-Type", f"multipart/form-data; boundary={boundary}")
+    req.add_header("Authorization", f"Bearer {WHATSAPP_TOKEN}")
+
+    with urllib.request.urlopen(req, data=body, timeout=30) as res:
+        return json.loads(res.read().decode("utf-8") or "{}")
+
+
+def enviar_whatsapp_media(telefono, media_type, media_id, filename="", caption=""):
+    if not WHATSAPP_TOKEN or not PHONE_NUMBER_ID:
+        raise RuntimeError("Missing WHATSAPP_TOKEN/PHONE_NUMBER_ID environment variables")
+
+    clean_type = str(media_type or "").strip().lower()
+    if clean_type not in {"image", "video", "audio", "document", "sticker"}:
+        raise ValueError("Unsupported media_type")
+
+    media_payload = {"id": media_id}
+    if clean_type in {"image", "video", "document"} and caption:
+        media_payload["caption"] = str(caption)[:1024]
+    if clean_type == "document" and filename:
+        media_payload["filename"] = str(filename)[:240]
+
+    payload = {
+        "messaging_product": "whatsapp",
+        "to": telefono,
+        "type": clean_type,
+        clean_type: media_payload,
+    }
+    return send_whatsapp_payload(payload)
+
+
 def obtener_url_media(media_id):
     url = f"https://graph.facebook.com/v19.0/{media_id}"
     req = urllib.request.Request(url)
@@ -1270,6 +1321,15 @@ def extraer_mensaje(msg):
         audio_id = msg.get("audio", {}).get("id")
         audio_url = obtener_url_media(audio_id) if audio_id else ""
         return f"[Audio]: {audio_url}", "audio"
+
+    if msg_type == "video":
+        video_id = msg.get("video", {}).get("id")
+        caption = str(msg.get("video", {}).get("caption") or "").strip()
+        video_url = obtener_url_media(video_id) if video_id else ""
+        message = f"[Video]: {video_url}"
+        if caption:
+            message = f"{message}\n{caption}"
+        return message, "video"
 
     if msg_type == "sticker":
         sticker_id = msg.get("sticker", {}).get("id")
@@ -1393,6 +1453,108 @@ def send_message_from_panel(event):
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
         logger.error("WhatsApp send failed status=%s body=%s", exc.code, error_body)
+        return response(exc.code, {"error": error_body})
+
+
+def normalize_outbound_media_type(value, mime_type):
+    requested = str(value or "").strip().lower()
+    if requested in {"image", "video", "audio", "document", "sticker"}:
+        return requested
+
+    mime = str(mime_type or "").lower()
+    if mime == "image/webp":
+        return "sticker"
+    if mime.startswith("image/"):
+        return "image"
+    if mime.startswith("video/"):
+        return "video"
+    if mime.startswith("audio/"):
+        return "audio"
+    return "document"
+
+
+def is_supported_whatsapp_audio(mime_type):
+    clean_mime = str(mime_type or "").split(";", 1)[0].strip().lower()
+    return clean_mime in {
+        "audio/aac",
+        "audio/mp4",
+        "audio/mpeg",
+        "audio/amr",
+        "audio/ogg",
+    }
+
+
+def format_outbound_media_log(media_type, media_url, filename, mime_type, caption):
+    clean_caption = str(caption or "").strip()
+    if media_type == "image":
+        message = f"[Imagen]: {media_url}"
+        return f"{message}\n{clean_caption}".strip() if clean_caption else message
+    if media_type == "video":
+        message = f"[Video]: {media_url}"
+        return f"{message}\n{clean_caption}".strip() if clean_caption else message
+    if media_type == "audio":
+        return f"[Audio]: {media_url}"
+    if media_type == "sticker":
+        return f"[Sticker]: {media_url}"
+    safe_filename = str(filename or "documento").replace("|", "-").strip()
+    safe_mime = str(mime_type or "application/octet-stream").replace("|", "-").strip()
+    message = f"[Documento]: {safe_filename} | {safe_mime} | {media_url}"
+    return f"{message}\n{clean_caption}".strip() if clean_caption else message
+
+
+def send_media_from_panel(event):
+    body = parse_body(event)
+    telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
+    filename = str(body.get("filename") or "archivo").strip()
+    mime_type = str(body.get("mime_type") or body.get("content_type") or "application/octet-stream").strip()
+    caption = str(body.get("caption") or "").strip()
+    media_type = normalize_outbound_media_type(body.get("media_type"), mime_type)
+    data_base64 = str(body.get("data_base64") or body.get("base64") or "").strip()
+    agent_username = str(body.get("agent_username") or "").strip()
+    agent_name = str(body.get("agent_name") or agent_username or "").strip()
+
+    if not telefono or not data_base64:
+        return response(400, {"error": "phone and data_base64 are required"})
+
+    if media_type == "audio" and not is_supported_whatsapp_audio(mime_type):
+        return response(415, {
+            "error": "audio format is not supported by WhatsApp",
+            "mime_type": mime_type,
+        })
+
+    if "," in data_base64 and data_base64.lower().startswith("data:"):
+        data_base64 = data_base64.split(",", 1)[1]
+
+    try:
+        data = base64.b64decode(data_base64, validate=True)
+    except Exception:
+        return response(400, {"error": "data_base64 is invalid"})
+
+    if len(data) > MAX_UPLOAD_MEDIA_BYTES:
+        return response(413, {"error": "media is too large"})
+
+    try:
+        upload_result = upload_media_to_meta(data, filename, mime_type)
+        media_id = str(upload_result.get("id") or "").strip()
+        if not media_id:
+            return response(502, {"error": "media upload did not return an id", "result": upload_result})
+
+        send_result = enviar_whatsapp_media(telefono, media_type, media_id, filename, caption)
+        media_url = obtener_url_media(media_id) or f"meta-media:{media_id}"
+        log_message = format_outbound_media_log(media_type, media_url, filename, mime_type, caption)
+        guardar_mensaje(telefono, log_message, "salida", media_type, agent_username, agent_name)
+        mark_conversation_attended(telefono)
+        return response(200, {
+            "success": True,
+            "media_type": media_type,
+            "media_id": media_id,
+            "media_url": media_url,
+            "upload": upload_result,
+            "result": send_result,
+        })
+    except urllib.error.HTTPError as exc:
+        error_body = exc.read().decode("utf-8", errors="replace")
+        logger.error("WhatsApp media send failed status=%s body=%s", exc.code, error_body[:5000])
         return response(exc.code, {"error": error_body})
 
 
@@ -1618,6 +1780,8 @@ def lambda_handler(event, context):
             return proxy_media(event)
         if method == "POST" and path == "/send-message":
             return send_message_from_panel(event)
+        if method == "POST" and path == "/send-media":
+            return send_media_from_panel(event)
         if method == "POST" and path == "/calls/connect":
             return connect_whatsapp_call(event)
         if method == "POST" and path == "/calls/request-permission":

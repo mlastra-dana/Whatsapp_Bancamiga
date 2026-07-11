@@ -1190,6 +1190,24 @@
             color: #ffffff;
         }
 
+        .attachment-toggle {
+            font-size: 18px;
+        }
+
+        .voice-toggle {
+            font-size: 18px;
+        }
+
+        .voice-toggle.recording {
+            background: var(--danger);
+            animation: voicePulse 1.2s ease-in-out infinite;
+        }
+
+        @keyframes voicePulse {
+            0%, 100% { box-shadow: 0 0 0 0 rgba(178, 24, 24, 0.24); }
+            50% { box-shadow: 0 0 0 8px rgba(178, 24, 24, 0); }
+        }
+
         .emoji-picker {
             position: absolute;
             left: 0;
@@ -1276,6 +1294,49 @@
             border-radius: 20px;
             min-height: 38px;
             min-width: 86px;
+        }
+
+        .pending-media {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            gap: 10px;
+            margin: 0 114px 10px 60px;
+            padding: 8px 10px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface-muted);
+            color: var(--muted);
+            font-size: 12px;
+        }
+
+        .pending-media.open {
+            display: flex;
+        }
+
+        .pending-media strong {
+            display: block;
+            color: var(--navy);
+            font-size: 13px;
+            line-height: 1.2;
+        }
+
+        .pending-media button {
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            background: var(--surface);
+            color: var(--danger);
+            cursor: pointer;
+            font-weight: 800;
+            min-width: 32px;
+            min-height: 28px;
+        }
+
+        .chat-panel.drag-over .chat-messages,
+        .chat-panel.drag-over .composer-panel {
+            outline: 2px dashed var(--violet);
+            outline-offset: -6px;
+            background-color: rgba(245, 80, 35, 0.04);
         }
 
         .send-status {
@@ -1382,6 +1443,11 @@
         .message.audio-message {
             width: fit-content;
             max-width: min(430px, calc(100vw - 80px));
+        }
+
+        .message.video-message {
+            width: fit-content;
+            max-width: min(360px, 70%);
         }
 
         .message.sticker-message,
@@ -1492,6 +1558,15 @@
             padding: 6px;
             border-radius: 6px;
             background: transparent;
+        }
+
+        .message-video {
+            display: block;
+            width: 100%;
+            max-width: 330px;
+            max-height: 260px;
+            border-radius: 6px;
+            background: #000;
         }
 
         .media-body {
@@ -2381,11 +2456,15 @@
                         <div class="chat-input" id="chat-input">
                             <div class="composer-wrap">
                                 <button class="emoji-toggle" type="button" id="emoji-toggle" onclick="toggleEmojiPicker()" aria-label="Abrir emojis">☺</button>
+                                <button class="emoji-toggle attachment-toggle" type="button" id="attachment-toggle" onclick="document.getElementById('media-input').click()" aria-label="Adjuntar archivo">📎</button>
+                                <button class="emoji-toggle voice-toggle" type="button" id="voice-toggle" onclick="toggleVoiceRecording()" aria-label="Grabar nota de voz">🎙</button>
+                                <input id="media-input" type="file" hidden accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,.csv">
                                 <textarea id="message-input" placeholder=""></textarea>
                                 <div class="emoji-picker" id="emoji-picker" aria-label="Emojis rápidos"></div>
                             </div>
                             <button class="primary-btn" onclick="sendMessage()" id="send-btn">Enviar</button>
                         </div>
+                        <div class="pending-media" id="pending-media"></div>
                     </div>
                     <div class="send-status" id="send-status"></div>
                 </div>
@@ -2530,6 +2609,7 @@
         const API_BASE_URL = (window.CHATTLOGGER_API_URL || '').replace(/\/$/, '');
         const API_URL = API_BASE_URL ? `${API_BASE_URL}/conversations` : '';
         const SEND_API_URL = API_BASE_URL ? `${API_BASE_URL}/send-message` : '';
+        const SEND_MEDIA_API_URL = API_BASE_URL ? `${API_BASE_URL}/send-media` : '';
         const CALL_CONNECT_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/connect` : '';
         const CALL_PERMISSION_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/request-permission` : '';
         const CALL_ACCEPT_API_URL = API_BASE_URL ? `${API_BASE_URL}/calls/accept` : '';
@@ -2620,6 +2700,10 @@
         let incomingCallRingtoneStopTimer = null;
         let lastRingingCallKey = '';
         let audioContextUnlocked = false;
+        let pendingMediaFile = null;
+        let mediaRecorder = null;
+        let recordedAudioChunks = [];
+        let isRecordingVoice = false;
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
@@ -4858,6 +4942,7 @@
             const imageMatch = text.match(/^\[Imagen\]:\s*(https?:\/\/\S+)/i);
             const audioMatch = text.match(/^\[Audio\]:\s*(https?:\/\/\S+)/i);
             const stickerMatch = text.match(/^\[Sticker\]:\s*(https?:\/\/\S+)/i);
+            const videoMatch = text.match(/^\[Video\]:\s*(https?:\/\/\S+)/i);
             const documentMatch = text.match(/^\[Documento\]:\s*([^|]+)\|\s*([^|]+)\|\s*(https?:\/\/\S+)/i);
             const locationMatch = text.match(/^\[Ubicacion\]:\s*([-.\d]+),\s*([-.\d]+)(.*)$/i);
             const callMatch = text.match(/^\[Llamada\]:\s*(.*)$/i);
@@ -4873,6 +4958,17 @@
                         <span class="media-error">Imagen expirada</span>
                         <img class="message-image" src="${escapeHtml(imageUrl)}" alt="Imagen del mensaje" loading="lazy" onload="this.previousElementSibling.previousElementSibling.style.display='none'" onerror="this.style.display='none';this.previousElementSibling.style.display='flex';this.previousElementSibling.previousElementSibling.style.display='none'">
                     </a>
+                    ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
+                    ${templateActions}
+                </div>`;
+            }
+
+            if (videoMatch) {
+                const url = videoMatch[1];
+                const videoUrl = proxiedMediaUrl(url);
+                const remainingText = text.slice(videoMatch[0].length).trim();
+                return `<div class="media-card">
+                    <video class="message-video" controls preload="metadata" src="${escapeHtml(videoUrl)}" onerror="this.insertAdjacentHTML('afterend', '<div class=&quot;media-unavailable&quot; style=&quot;display:block&quot;>Video expirado</div>'); this.style.display='none';"></video>
                     ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
                     ${templateActions}
                 </div>`;
@@ -4979,7 +5075,7 @@
 
         function isRichMessageContent(message) {
             const text = formatTemplatePlaceholders(message.message).trim();
-            return message.msg_type === 'template' || /^\[(Imagen|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto)\]:/i.test(text);
+            return message.msg_type === 'template' || /^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto)\]:/i.test(text);
         }
 
         function renderSelectedContact(options = {}) {
@@ -5042,11 +5138,13 @@
                     ? ' document-message'
                     : /^\[Audio\]:/i.test(formattedMessage)
                         ? ' audio-message'
-                        : /^\[Sticker\]:/i.test(formattedMessage)
-                            ? ' sticker-message'
-                            : /^\[Contacto\]:/i.test(formattedMessage)
-                                ? ' contact-message'
-                                : '';
+                        : /^\[Video\]:/i.test(formattedMessage)
+                            ? ' video-message'
+                            : /^\[Sticker\]:/i.test(formattedMessage)
+                                ? ' sticker-message'
+                                : /^\[Contacto\]:/i.test(formattedMessage)
+                                    ? ' contact-message'
+                                    : '';
                 return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}"><div class="direction">${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
@@ -5059,6 +5157,11 @@
         }
 
         async function sendMessage() {
+            if (pendingMediaFile) {
+                await sendPendingMedia();
+                return;
+            }
+
             const input = document.getElementById('message-input');
             const btn = document.getElementById('send-btn');
             const status = document.getElementById('send-status');
@@ -5127,11 +5230,270 @@
             }
         }
 
+        function getMediaTypeFromFile(file) {
+            const mime = String(file.type || '').toLowerCase();
+            const name = String(file.name || '').toLowerCase();
+            if (mime === 'image/webp' || name.endsWith('.webp')) return 'sticker';
+            if (mime.startsWith('image/')) return 'image';
+            if (mime.startsWith('video/')) return 'video';
+            if (mime.startsWith('audio/')) return 'audio';
+            return 'document';
+        }
+
+        function readFileAsBase64(file) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    const result = String(reader.result || '');
+                    resolve(result.includes(',') ? result.split(',', 2)[1] : result);
+                };
+                reader.onerror = () => reject(reader.error || new Error('No se pudo leer el archivo'));
+                reader.readAsDataURL(file);
+            });
+        }
+
+        function getMediaLabel(file) {
+            const mediaType = getMediaTypeFromFile(file);
+            const labels = {
+                image: 'Imagen lista',
+                video: 'Video listo',
+                audio: 'Nota de voz lista',
+                sticker: 'Sticker listo',
+                document: 'Documento listo',
+            };
+            return labels[mediaType] || 'Archivo listo';
+        }
+
+        function formatFileSize(bytes) {
+            if (!Number.isFinite(bytes)) return '';
+            if (bytes < 1024) return `${bytes} B`;
+            if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+            return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+        }
+
+        function clearPendingMedia() {
+            pendingMediaFile = null;
+            const pending = document.getElementById('pending-media');
+            pending.className = 'pending-media';
+            pending.innerHTML = '';
+            document.getElementById('media-input').value = '';
+        }
+
+        function setPendingMediaFile(file) {
+            const status = document.getElementById('send-status');
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) {
+                status.className = 'send-status error';
+                status.textContent = 'El archivo supera el límite de 5 MB para esta demo.';
+                return;
+            }
+
+            pendingMediaFile = file;
+            const pending = document.getElementById('pending-media');
+            pending.className = 'pending-media open';
+            pending.innerHTML = `
+                <div>
+                    <strong>${escapeHtml(getMediaLabel(file))}</strong>
+                    <span>${escapeHtml(file.name || 'archivo')} · ${escapeHtml(formatFileSize(file.size))}</span>
+                    <span> · Presiona Enter o Enviar para mandarlo.</span>
+                </div>
+                <button type="button" onclick="clearPendingMedia()" aria-label="Quitar archivo">×</button>
+            `;
+            status.className = 'send-status';
+            status.textContent = '';
+            document.getElementById('message-input').focus();
+        }
+
+        function queueSelectedMedia() {
+            const input = document.getElementById('media-input');
+            const file = input.files && input.files[0];
+            input.value = '';
+            setPendingMediaFile(file);
+        }
+
+        async function sendPendingMedia() {
+            const textInput = document.getElementById('message-input');
+            const btn = document.getElementById('send-btn');
+            const attachBtn = document.getElementById('attachment-toggle');
+            const voiceBtn = document.getElementById('voice-toggle');
+            const status = document.getElementById('send-status');
+            const file = pendingMediaFile;
+
+            if (!file || !selectedPhone) return;
+            if (!currentAgent) {
+                status.className = 'send-status error';
+                status.textContent = 'No se pudo identificar el usuario de DANAConnect.';
+                return;
+            }
+            if (!SEND_MEDIA_API_URL) {
+                status.className = 'send-status error';
+                status.textContent = 'Falta configurar VITE_API_URL en Amplify.';
+                return;
+            }
+            if (file.size > 5 * 1024 * 1024) {
+                status.className = 'send-status error';
+                status.textContent = 'El archivo supera el límite de 5 MB para esta demo.';
+                return;
+            }
+
+            const mediaType = getMediaTypeFromFile(file);
+            const caption = ['image', 'video', 'document'].includes(mediaType)
+                ? textInput.value.trim()
+                : '';
+
+            btn.disabled = true;
+            attachBtn.disabled = true;
+            voiceBtn.disabled = true;
+            status.className = 'send-status';
+            status.textContent = 'Enviando archivo...';
+
+            try {
+                const dataBase64 = await readFileAsBase64(file);
+                const response = await fetch(SEND_MEDIA_API_URL, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        phone: selectedPhone,
+                        filename: file.name || 'archivo',
+                        mime_type: file.type || 'application/octet-stream',
+                        media_type: mediaType,
+                        caption,
+                        data_base64: dataBase64,
+                        agent_username: currentAgent.username,
+                        agent_name: currentAgent.name,
+                    }),
+                });
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({}));
+                    throw new Error(err.error || 'No se pudo enviar el archivo');
+                }
+
+                if (caption) textInput.value = '';
+                clearPendingMedia();
+                await loadConversations();
+                status.className = 'send-status success';
+                status.textContent = 'Archivo enviado.';
+                setTimeout(() => {
+                    if (status.textContent === 'Archivo enviado.') status.textContent = '';
+                }, 2500);
+            } catch (error) {
+                status.className = 'send-status error';
+                status.textContent = 'Error: ' + (error.message || 'No se pudo enviar el archivo.');
+            } finally {
+                btn.disabled = false;
+                attachBtn.disabled = false;
+                voiceBtn.disabled = false;
+                textInput.focus();
+            }
+        }
+
+        function getVoiceMimeType() {
+            if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
+            return [
+                'audio/ogg;codecs=opus',
+                'audio/mp4',
+            ].find(type => MediaRecorder.isTypeSupported(type)) || '';
+        }
+
+        function getVoiceExtension(mimeType) {
+            const type = String(mimeType || '').toLowerCase();
+            if (type.includes('ogg')) return 'ogg';
+            if (type.includes('mp4')) return 'm4a';
+            if (type.includes('mpeg')) return 'mp3';
+            return 'webm';
+        }
+
+        async function toggleVoiceRecording() {
+            const voiceBtn = document.getElementById('voice-toggle');
+            const status = document.getElementById('send-status');
+
+            if (isRecordingVoice && mediaRecorder) {
+                mediaRecorder.stop();
+                return;
+            }
+
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+                status.className = 'send-status error';
+                status.textContent = 'Este navegador no permite grabar notas de voz desde el panel.';
+                return;
+            }
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                const mimeType = getVoiceMimeType();
+                if (!mimeType) {
+                    stream.getTracks().forEach(track => track.stop());
+                    status.className = 'send-status error';
+                    status.textContent = 'Este navegador graba audio en un formato que WhatsApp no acepta directamente.';
+                    return;
+                }
+                recordedAudioChunks = [];
+                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                mediaRecorder.ondataavailable = event => {
+                    if (event.data && event.data.size > 0) recordedAudioChunks.push(event.data);
+                };
+                mediaRecorder.onstop = () => {
+                    stream.getTracks().forEach(track => track.stop());
+                    const finalMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
+                    const blob = new Blob(recordedAudioChunks, { type: finalMimeType });
+                    const extension = getVoiceExtension(finalMimeType);
+                    const file = new File([blob], `nota-de-voz-${Date.now()}.${extension}`, { type: finalMimeType });
+                    isRecordingVoice = false;
+                    voiceBtn.classList.remove('recording');
+                    voiceBtn.textContent = '🎙';
+                    status.className = 'send-status';
+                    status.textContent = '';
+                    setPendingMediaFile(file);
+                };
+                mediaRecorder.start();
+                isRecordingVoice = true;
+                voiceBtn.classList.add('recording');
+                voiceBtn.textContent = '■';
+                status.className = 'send-status';
+                status.textContent = 'Grabando nota de voz... vuelve a tocar el micrófono para detener.';
+            } catch (error) {
+                status.className = 'send-status error';
+                status.textContent = 'No se pudo iniciar el micrófono: ' + (error.message || 'permiso denegado');
+            }
+        }
+
+        function queueDroppedOrPastedFile(file) {
+            if (!file) return false;
+            setPendingMediaFile(file);
+            return true;
+        }
+
         document.getElementById('message-input').addEventListener('keydown', event => {
             if (event.key === 'Enter' && !event.shiftKey) {
                 event.preventDefault();
                 sendMessage();
             }
+        });
+        document.getElementById('message-input').addEventListener('paste', event => {
+            const files = event.clipboardData && event.clipboardData.files;
+            if (files && files.length > 0 && queueDroppedOrPastedFile(files[0])) {
+                event.preventDefault();
+            }
+        });
+        document.getElementById('media-input').addEventListener('change', queueSelectedMedia);
+
+        const chatPanelDropZone = document.querySelector('.chat-panel');
+        ['dragenter', 'dragover'].forEach(eventName => {
+            chatPanelDropZone.addEventListener(eventName, event => {
+                event.preventDefault();
+                chatPanelDropZone.classList.add('drag-over');
+            });
+        });
+        ['dragleave', 'drop'].forEach(eventName => {
+            chatPanelDropZone.addEventListener(eventName, event => {
+                event.preventDefault();
+                if (eventName === 'drop') {
+                    const files = event.dataTransfer && event.dataTransfer.files;
+                    if (files && files.length > 0) queueDroppedOrPastedFile(files[0]);
+                }
+                chatPanelDropZone.classList.remove('drag-over');
+            });
         });
 
         document.getElementById('search-input').addEventListener('keydown', event => {
