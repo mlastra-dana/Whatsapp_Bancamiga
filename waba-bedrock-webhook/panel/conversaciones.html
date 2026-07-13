@@ -3120,13 +3120,39 @@
             return normalizePhone(phone).length > 0;
         }
 
+        function getContactPhoneValue(contact) {
+            return normalizePhone(
+                contact.phone ||
+                contact.to ||
+                contact.telefono ||
+                contact.Telefono ||
+                contact.TELEFONO ||
+                contact['Teléfono'] ||
+                ''
+            );
+        }
+
+        function getContactNameValue(contact) {
+            const firstName = String(contact.first_name || contact.FirstName || '').trim();
+            const lastName = String(contact.last_name || contact.LastName || '').trim();
+            return String(
+                contact.name ||
+                contact.nombre ||
+                contact.NombreCliente ||
+                contact.NOMBRECLIENTE ||
+                contact.Nombre ||
+                [firstName, lastName].filter(Boolean).join(' ') ||
+                ''
+            ).trim();
+        }
+
         function indexContact(contact) {
-            const phone = normalizePhone(contact.phone || contact.telefono || '');
+            const phone = getContactPhoneValue(contact);
             if (!phone) return;
             const normalizedContact = {
                 ...contact,
                 phone,
-                name: contact.name || contact.nombre || [contact.first_name, contact.last_name].filter(Boolean).join(' '),
+                name: getContactNameValue(contact),
             };
             contactsMap[phone] = normalizedContact;
             if (phone.startsWith('58')) contactsMap[phone.substring(2)] = normalizedContact;
@@ -3147,10 +3173,10 @@
         }
 
         function upsertSavedContact(contact) {
-            const phone = normalizePhone(contact.phone || contact.telefono);
+            const phone = getContactPhoneValue(contact);
             if (!phone) return;
-            const cleanContact = { phone, name: contact.name || contact.nombre || '' };
-            const existingIndex = savedContacts.findIndex(item => normalizePhone(item.phone || item.telefono) === phone);
+            const cleanContact = { phone, name: getContactNameValue(contact) };
+            const existingIndex = savedContacts.findIndex(item => getContactPhoneValue(item) === phone);
             if (existingIndex >= 0) savedContacts[existingIndex] = cleanContact;
             else savedContacts.push(cleanContact);
         }
@@ -3158,7 +3184,7 @@
         function removeSavedContact(phone) {
             const normalizedPhone = normalizePhone(phone);
             savedContacts = savedContacts.filter(contact =>
-                normalizePhone(contact.phone || contact.telefono) !== normalizedPhone
+                getContactPhoneValue(contact) !== normalizedPhone
             );
             delete contactsMap[normalizedPhone];
             if (normalizedPhone.startsWith('58')) delete contactsMap[normalizedPhone.substring(2)];
@@ -3204,7 +3230,7 @@
 
         function syncSavedContactsIntoConversations() {
             savedContacts.forEach(contact => {
-                const phone = normalizePhone(contact.phone || contact.telefono);
+                const phone = getContactPhoneValue(contact);
                 if (!phone || contacts[phone]) return;
                 contacts[phone] = {
                     phone,
@@ -4059,8 +4085,8 @@
             const list = document.getElementById('contacts-modal-list');
             const sortedContacts = [...savedContacts]
                 .map(contact => ({
-                    phone: normalizePhone(contact.phone || contact.telefono),
-                    name: contact.name || contact.nombre || '',
+                    phone: getContactPhoneValue(contact),
+                    name: getContactNameValue(contact),
                 }))
                 .filter(contact => contact.phone && contact.name)
                 .sort((a, b) => a.name.localeCompare(b.name));
@@ -4912,8 +4938,8 @@
         function getSavedContactsForExport() {
             return [...savedContacts]
                 .map(contact => ({
-                    name: contact.name || contact.nombre || '',
-                    phone: normalizePhone(contact.phone || contact.telefono),
+                    name: getContactNameValue(contact),
+                    phone: getContactPhoneValue(contact),
                     updated_at: contact.updated_at || '',
                 }))
                 .filter(contact => contact.phone || contact.name)

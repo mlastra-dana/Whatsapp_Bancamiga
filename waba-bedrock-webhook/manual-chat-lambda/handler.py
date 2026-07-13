@@ -194,6 +194,35 @@ def normalize_phone(value):
     return "".join(char for char in str(value or "") if char.isdigit())
 
 
+def get_contact_phone_value(data):
+    if not isinstance(data, dict):
+        return ""
+    return normalize_phone(
+        data.get("phone")
+        or data.get("to")
+        or data.get("telefono")
+        or data.get("Telefono")
+        or data.get("TELEFONO")
+        or data.get("teléfono")
+    )
+
+
+def get_contact_name_value(data):
+    if not isinstance(data, dict):
+        return ""
+    first_name = str(data.get("first_name") or data.get("FirstName") or "").strip()
+    last_name = str(data.get("last_name") or data.get("LastName") or "").strip()
+    return str(
+        data.get("name")
+        or data.get("nombre")
+        or data.get("NombreCliente")
+        or data.get("NOMBRECLIENTE")
+        or data.get("Nombre")
+        or " ".join(part for part in [first_name, last_name] if part)
+        or ""
+    ).strip()
+
+
 def get_business_phone_from_webhook(value):
     metadata = value.get("metadata") if isinstance(value, dict) and isinstance(value.get("metadata"), dict) else {}
     return normalize_phone(
@@ -236,7 +265,7 @@ def list_contacts(event):
             phone = key[len(CONTACT_KEY_PREFIX):]
             contacts.append({
                 "phone": phone,
-                "name": item.get("name") or item.get("nombre") or "",
+                "name": get_contact_name_value(item),
                 "updated_at": item.get("updated_at", ""),
             })
 
@@ -251,8 +280,8 @@ def list_contacts(event):
 
 def save_contact(event):
     body = parse_body(event)
-    phone = normalize_phone(body.get("phone") or body.get("telefono"))
-    name = str(body.get("name") or body.get("nombre") or "").strip()
+    phone = get_contact_phone_value(body)
+    name = get_contact_name_value(body)
 
     if not phone or not name:
         return response(400, {"error": "phone and name are required"})
@@ -261,6 +290,7 @@ def save_contact(event):
         "telefono": f"{CONTACT_KEY_PREFIX}{phone}",
         "phone": phone,
         "name": name[:160],
+        "source": "manual",
         "updated_at": now_iso(),
     }
     state_table.put_item(Item=contact)
@@ -269,6 +299,49 @@ def save_contact(event):
         "name": contact["name"],
         "updated_at": contact["updated_at"],
     }})
+
+
+def save_dana_contact_from_payload(body):
+    phone = get_contact_phone_value(body)
+    name = get_contact_name_value(body)
+    if not phone or not name:
+        return None
+
+    key = {"telefono": f"{CONTACT_KEY_PREFIX}{phone}"}
+    try:
+        current = state_table.get_item(Key=key).get("Item") or {}
+    except Exception:
+        logger.exception("Could not read contact before DANA upsert")
+        current = {}
+
+    current_source = str(current.get("source") or "").strip().lower()
+    current_name = get_contact_name_value(current)
+    if current_name and current_source not in {"dana", "template", ""}:
+        return {
+            "phone": phone,
+            "name": current_name,
+            "source": current.get("source") or "manual",
+            "updated": False,
+        }
+
+    contact = {
+        "telefono": key["telefono"],
+        "phone": phone,
+        "name": name[:160],
+        "NombreCliente": name[:160],
+        "source": "dana",
+        "updated_at": now_iso(),
+    }
+    email = str(body.get("Email") or body.get("email") or "").strip()
+    if email:
+        contact["email"] = email[:240]
+    state_table.put_item(Item=contact)
+    return {
+        "phone": contact["phone"],
+        "name": contact["name"],
+        "source": contact["source"],
+        "updated": True,
+    }
 
 
 def normalize_quick_templates(value):
@@ -1123,7 +1196,7 @@ def guardar_template_dana(event):
         return response(500, {"error": "CONVERSATIONS_TABLE_NAME is not configured"})
 
     body = parse_body(event)
-    telefono = str(body.get("to") or body.get("phone") or body.get("telefono") or "").strip()
+    telefono = get_contact_phone_value(body)
     template = body.get("template") if isinstance(body.get("template"), dict) else {}
     template_name = str(template.get("name") or body.get("template_name") or "").strip()
     logger.info(
@@ -1137,6 +1210,7 @@ def guardar_template_dana(event):
     if not telefono or not template_name:
         return response(400, {"error": "to and template.name are required"})
 
+    dana_contact = save_dana_contact_from_payload(body)
     timestamp = str(body.get("sent_at") or now_iso())
     mensaje = strip_gateway_status_prefix(body.get("message"))
     template_id = body.get("template_id") or body.get("meta_template_id")
@@ -1171,7 +1245,12 @@ def guardar_template_dana(event):
         }
     )
 
-    return response(200, {"success": True, "phone": telefono, "template_name": template_name})
+    return response(200, {
+        "success": True,
+        "phone": telefono,
+        "template_name": template_name,
+        "contact": dana_contact,
+    })
 
 
 def normalizar_log_para_panel(item):

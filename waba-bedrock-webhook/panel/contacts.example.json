@@ -1,11 +1,12 @@
 [
   {
-    "phone": "584120000000",
-    "name": "Maria Lastra"
+    "Telefono": "584142563325",
+    "NombreCliente": "Maria Lastra",
+    "Email": "mlastra@danaconnect.com"
   },
   {
-    "phone": "584140000000",
-    "first_name": "Cliente",
-    "last_name": "Demo"
+    "Telefono": "584142728787",
+    "NombreCliente": "Sarina Salas",
+    "Email": "ssalas@danaconnect.com"
   }
 ]
