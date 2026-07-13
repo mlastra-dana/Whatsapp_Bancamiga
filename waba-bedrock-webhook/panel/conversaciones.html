@@ -2780,7 +2780,7 @@
                 body: 'Gracias por escribirnos. En este momento nuestro equipo está fuera del horario de atención. Te responderemos el próximo día hábil.'
             }
         ];
-        const AGENT_COLORS = ['#f55023', '#4b16b6', '#168a55', '#c2410c', '#0f6cbf', '#9d174d', '#6b7280'];
+        const AGENT_COLORS = ['#f55023', '#0F766E', '#168a55', '#c2410c', '#0f6cbf', '#9d174d', '#6b7280'];
 
         let allMessages = [];
         let contacts = {};
@@ -2849,7 +2849,7 @@
         function getAgentColor(username, name = '') {
             const key = String(username || name || 'asesor').toLowerCase();
             if (key.includes('ssalas') || key.includes('sarina')) return '#f55023';
-            if (key.includes('murquiola') || key.includes('urquiola') || key.includes('mv')) return '#4b16b6';
+            if (key.includes('murquiola') || key.includes('urquiola') || key.includes('mv')) return '#0F766E';
             return AGENT_COLORS[Math.abs(hashString(key)) % AGENT_COLORS.length];
         }
 
