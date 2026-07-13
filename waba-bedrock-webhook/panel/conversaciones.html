@@ -2633,6 +2633,7 @@
         const REFRESH_INTERVAL_MS = 2000;
         const READ_STATE_REFRESH_MS = 10000;
         const AGENT_HEARTBEAT_MS = 15000;
+        let chatScrollFrame = 0;
         const INACTIVITY_TIMEOUT_MS = 30 * 60 * 1000;
         const DEFAULT_EMBEDDED_AGENT = { username: 'danaconnect-user', name: 'Usuario DANAConnect' };
         const DEMO_AGENTS = {
@@ -5084,6 +5085,26 @@
             return message.msg_type === 'template' || /^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto)\]:/i.test(text);
         }
 
+        function setChatScrollPosition(messagesDiv, options) {
+            if (!messagesDiv) return;
+            if (chatScrollFrame) cancelAnimationFrame(chatScrollFrame);
+
+            const applyScroll = () => {
+                if (options.stickToBottom) {
+                    messagesDiv.scrollTop = messagesDiv.scrollHeight;
+                    return;
+                }
+                const adjustedTop = options.previousTop + (messagesDiv.scrollHeight - options.previousHeight);
+                messagesDiv.scrollTop = Math.max(0, adjustedTop);
+            };
+
+            applyScroll();
+            chatScrollFrame = requestAnimationFrame(() => {
+                applyScroll();
+                chatScrollFrame = requestAnimationFrame(applyScroll);
+            });
+        }
+
         function renderSelectedContact(options = {}) {
             const contact = contacts[selectedPhone];
             if (!contact) return;
@@ -5117,7 +5138,7 @@
                 return;
             }
             const distanceFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
-            const shouldStayAtBottom = options.forceScrollBottom || distanceFromBottom <= 8;
+            const shouldStayAtBottom = options.forceScrollBottom || distanceFromBottom <= 120;
             const previousScrollHeight = messagesDiv.scrollHeight;
             const previousScrollTop = messagesDiv.scrollTop;
 
@@ -5154,11 +5175,11 @@
                 return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}"><div class="direction">${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
-            if (shouldStayAtBottom) {
-                messagesDiv.scrollTop = messagesDiv.scrollHeight;
-            } else {
-                messagesDiv.scrollTop = previousScrollTop + (messagesDiv.scrollHeight - previousScrollHeight);
-            }
+            setChatScrollPosition(messagesDiv, {
+                stickToBottom: shouldStayAtBottom,
+                previousTop: previousScrollTop,
+                previousHeight: previousScrollHeight,
+            });
             selectedContactRenderKey = renderKey;
         }
 
@@ -5236,8 +5257,87 @@
             }
         }
 
+        const SUPPORTED_WHATSAPP_MEDIA_MIME_TYPES = new Set([
+            'audio/aac',
+            'audio/amr',
+            'audio/mpeg',
+            'audio/ogg',
+            'audio/opus',
+            'application/msword',
+            'application/pdf',
+            'application/vnd.ms-excel',
+            'application/vnd.ms-powerpoint',
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            'image/jpeg',
+            'image/png',
+            'image/webp',
+            'text/plain',
+            'video/3gpp',
+            'video/mp4',
+        ]);
+
+        const RELIABLE_AUDIO_MIME_TYPES = new Set([
+            'audio/aac',
+            'audio/amr',
+            'audio/mpeg',
+            'audio/ogg',
+            'audio/opus',
+        ]);
+
+        const EXTENSION_MIME_TYPES = {
+            aac: 'audio/aac',
+            amr: 'audio/amr',
+            doc: 'application/msword',
+            docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+            jpeg: 'image/jpeg',
+            jpg: 'image/jpeg',
+            mp3: 'audio/mpeg',
+            mp4: 'video/mp4',
+            ogg: 'audio/ogg',
+            opus: 'audio/opus',
+            pdf: 'application/pdf',
+            png: 'image/png',
+            pot: 'application/vnd.ms-powerpoint',
+            pps: 'application/vnd.ms-powerpoint',
+            ppt: 'application/vnd.ms-powerpoint',
+            pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+            txt: 'text/plain',
+            webp: 'image/webp',
+            xls: 'application/vnd.ms-excel',
+            xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+        };
+
+        function getFileExtension(file) {
+            const name = String(file?.name || '').toLowerCase();
+            return name.includes('.') ? name.split('.').pop() : '';
+        }
+
+        function getFileMimeType(file) {
+            const browserMime = String(file?.type || '').split(';', 1)[0].trim().toLowerCase();
+            return browserMime || EXTENSION_MIME_TYPES[getFileExtension(file)] || 'application/octet-stream';
+        }
+
+        function getUnsupportedMediaReason(file) {
+            const mime = getFileMimeType(file);
+            const extension = getFileExtension(file);
+            const mediaType = getMediaTypeFromFile(file);
+
+            if (extension === 'csv' || mime === 'text/csv') {
+                return 'WhatsApp no admite CSV directamente. Convierte el archivo a .xlsx, .pdf o .txt antes de enviarlo.';
+            }
+            if (mediaType === 'audio') {
+                return '';
+            }
+            if (!SUPPORTED_WHATSAPP_MEDIA_MIME_TYPES.has(mime)) {
+                return `WhatsApp no admite archivos de tipo ${mime}. Usa PDF, TXT, Word, Excel, PowerPoint, imagen, video MP4/3GPP o audio MP3/OGG/AAC/AMR.`;
+            }
+            return '';
+        }
+
         function getMediaTypeFromFile(file) {
-            const mime = String(file.type || '').toLowerCase();
+            const mime = getFileMimeType(file);
             const name = String(file.name || '').toLowerCase();
             if (mime === 'image/webp' || name.endsWith('.webp')) return 'sticker';
             if (mime.startsWith('image/')) return 'image';
@@ -5291,6 +5391,13 @@
             if (file.size > 5 * 1024 * 1024) {
                 status.className = 'send-status error';
                 status.textContent = 'El archivo supera el límite de 5 MB para esta demo.';
+                return;
+            }
+            const unsupportedReason = getUnsupportedMediaReason(file);
+            if (unsupportedReason) {
+                status.className = 'send-status error';
+                status.textContent = unsupportedReason;
+                clearPendingMedia();
                 return;
             }
 
@@ -5361,7 +5468,7 @@
                     body: JSON.stringify({
                         phone: selectedPhone,
                         filename: file.name || 'archivo',
-                        mime_type: file.type || 'application/octet-stream',
+                        mime_type: getFileMimeType(file),
                         media_type: mediaType,
                         caption,
                         data_base64: dataBase64,
@@ -5398,6 +5505,8 @@
             if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
             return [
                 'audio/ogg;codecs=opus',
+                'audio/mp4;codecs=mp4a.40.2',
+                'audio/mp4',
             ].find(type => MediaRecorder.isTypeSupported(type)) || '';
         }
 
@@ -5430,7 +5539,7 @@
                 if (!mimeType) {
                     stream.getTracks().forEach(track => track.stop());
                     status.className = 'send-status error';
-                    status.textContent = 'Este navegador no graba notas de voz en OGG/Opus, que es el formato que WhatsApp entrega mejor. Por ahora adjunta un .mp3, .aac, .amr u .ogg desde el clip.';
+                    status.textContent = 'Este navegador no permite grabar audio en un formato compatible. Puedes adjuntar un audio desde el clip.';
                     return;
                 }
                 recordedAudioChunks = [];
@@ -5493,6 +5602,18 @@
             }
         });
         document.getElementById('media-input').addEventListener('change', queueSelectedMedia);
+        window.addEventListener('resize', () => {
+            const messagesDiv = document.getElementById('chat-messages');
+            if (!messagesDiv || !selectedPhone || !contacts[selectedPhone]) return;
+            const distanceFromBottom = messagesDiv.scrollHeight - messagesDiv.scrollTop - messagesDiv.clientHeight;
+            if (distanceFromBottom <= 160) {
+                setChatScrollPosition(messagesDiv, {
+                    stickToBottom: true,
+                    previousTop: messagesDiv.scrollTop,
+                    previousHeight: messagesDiv.scrollHeight,
+                });
+            }
+        });
 
         const chatPanelDropZone = document.querySelector('.chat-panel');
         ['dragenter', 'dragover'].forEach(eventName => {

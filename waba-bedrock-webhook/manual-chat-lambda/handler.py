@@ -3,6 +3,9 @@ import json
 import logging
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import unicodedata
 import urllib.error
 import urllib.parse
@@ -27,6 +30,32 @@ CORS_ORIGIN = os.environ.get("CORS_ORIGIN", "*")
 GRAPH_API_VERSION = os.environ.get("GRAPH_API_VERSION", "v20.0")
 MAX_MEDIA_BYTES = int(os.environ.get("MAX_MEDIA_BYTES", str(10 * 1024 * 1024)))
 MAX_UPLOAD_MEDIA_BYTES = int(os.environ.get("MAX_UPLOAD_MEDIA_BYTES", str(5 * 1024 * 1024)))
+FFMPEG_PATH = os.environ.get("FFMPEG_PATH", "/opt/bin/ffmpeg")
+SUPPORTED_WHATSAPP_MEDIA_MIME_TYPES = {
+    "audio/aac",
+    "audio/amr",
+    "audio/mpeg",
+    "audio/ogg",
+    "audio/opus",
+    "application/msword",
+    "application/pdf",
+    "application/vnd.ms-excel",
+    "application/vnd.ms-powerpoint",
+    "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    "image/jpeg",
+    "image/png",
+    "image/webp",
+    "text/plain",
+    "video/3gpp",
+    "video/mp4",
+}
+RELIABLE_AUDIO_MIME_TYPES = {
+    "audio/aac",
+    "audio/amr",
+    "audio/mpeg",
+}
 ABSENCE_BOT_STATE_KEY = "__absence_bot__"
 TEMPLATES_STATE_KEY = "__quick_templates__"
 CONTACT_KEY_PREFIX = "contact#"
@@ -1198,9 +1227,100 @@ def enviar_whatsapp(telefono, mensaje):
 
 def clean_mime_type(mime_type):
     clean_mime = str(mime_type or "application/octet-stream").split(";", 1)[0].strip().lower()
-    if clean_mime == "audio/m4a":
+    if clean_mime in {"audio/m4a", "audio/x-m4a"}:
         return "audio/mp4"
     return clean_mime or "application/octet-stream"
+
+
+def normalize_upload_mime_type(filename, mime_type):
+    return clean_mime_type(mime_type)
+
+
+def media_validation_error(filename, media_type, mime_type):
+    clean_filename = str(filename or "archivo").strip()
+    clean_mime = clean_mime_type(mime_type)
+    clean_media_type = str(media_type or "").strip().lower()
+
+    if clean_filename.lower().endswith(".csv") or clean_mime == "text/csv":
+        return (
+            "WhatsApp no admite archivos CSV directamente. "
+            "Convierte el archivo a .xlsx, .pdf o .txt antes de enviarlo."
+        )
+
+    if clean_mime not in SUPPORTED_WHATSAPP_MEDIA_MIME_TYPES:
+        return (
+            f"WhatsApp no admite archivos de tipo {clean_mime}. "
+            "Formatos soportados: PDF, TXT, Word, Excel, PowerPoint, imagen, video MP4/3GPP y audio MP3/OGG/AAC/AMR."
+        )
+
+    if clean_media_type == "audio" and clean_mime not in RELIABLE_AUDIO_MIME_TYPES:
+        return (
+            f"Este audio ({clean_mime}) no se entrega de forma confiable por WhatsApp desde el panel. "
+            "Usa .mp3, .ogg, .aac o .amr."
+        )
+
+    if clean_media_type == "document" and clean_mime.startswith(("audio/", "image/", "video/")):
+        return "El tipo de archivo no coincide con el mensaje que se quiere enviar."
+
+    return ""
+
+
+def get_ffmpeg_path():
+    if os.path.isabs(FFMPEG_PATH) and os.path.exists(FFMPEG_PATH):
+        return FFMPEG_PATH
+    return shutil.which(FFMPEG_PATH)
+
+
+def transcode_audio_for_whatsapp(data, filename, mime_type):
+    clean_mime = clean_mime_type(mime_type)
+    if clean_mime in RELIABLE_AUDIO_MIME_TYPES:
+        return data, filename, clean_mime
+
+    ffmpeg_path = get_ffmpeg_path()
+    if not ffmpeg_path:
+        raise RuntimeError(
+            "FFmpeg no está configurado en Lambda. Agrega un Lambda Layer con ffmpeg "
+            "y configura FFMPEG_PATH=/opt/bin/ffmpeg para enviar audios grabados desde Chrome/Safari."
+        )
+
+    source_extension = os.path.splitext(str(filename or ""))[1] or ".audio"
+    with tempfile.TemporaryDirectory() as tmpdir:
+        source_path = os.path.join(tmpdir, f"input{source_extension}")
+        output_path = os.path.join(tmpdir, "voice.mp3")
+
+        with open(source_path, "wb") as source_file:
+            source_file.write(data)
+
+        completed = subprocess.run(
+            [
+                ffmpeg_path,
+                "-y",
+                "-i",
+                source_path,
+                "-vn",
+                "-codec:a",
+                "libmp3lame",
+                "-b:a",
+                "64k",
+                "-ar",
+                "44100",
+                "-ac",
+                "1",
+                output_path,
+            ],
+            capture_output=True,
+            timeout=25,
+            check=False,
+        )
+        if completed.returncode != 0:
+            logger.error("FFmpeg audio transcode failed stderr=%s", completed.stderr.decode("utf-8", errors="replace")[:2000])
+            raise RuntimeError("No se pudo convertir el audio a un formato compatible con WhatsApp.")
+
+        with open(output_path, "rb") as output_file:
+            converted = output_file.read()
+
+    base_name = os.path.splitext(str(filename or "nota-de-voz"))[0] or "nota-de-voz"
+    return converted, f"{base_name}.mp3", "audio/mpeg"
 
 
 def upload_media_to_meta(data, filename, mime_type):
@@ -1488,13 +1608,7 @@ def normalize_outbound_media_type(value, mime_type):
 
 def is_supported_whatsapp_audio(mime_type):
     clean_mime = clean_mime_type(mime_type)
-    return clean_mime in {
-        "audio/aac",
-        "audio/mp4",
-        "audio/mpeg",
-        "audio/amr",
-        "audio/ogg",
-    }
+    return clean_mime in RELIABLE_AUDIO_MIME_TYPES
 
 
 def format_outbound_media_log(media_type, media_url, filename, mime_type, caption):
@@ -1519,7 +1633,10 @@ def send_media_from_panel(event):
     body = parse_body(event)
     telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
     filename = str(body.get("filename") or "archivo").strip()
-    mime_type = clean_mime_type(body.get("mime_type") or body.get("content_type") or "application/octet-stream")
+    mime_type = normalize_upload_mime_type(
+        filename,
+        body.get("mime_type") or body.get("content_type") or "application/octet-stream",
+    )
     caption = str(body.get("caption") or "").strip()
     media_type = normalize_outbound_media_type(body.get("media_type"), mime_type)
     data_base64 = str(body.get("data_base64") or body.get("base64") or "").strip()
@@ -1528,17 +1645,6 @@ def send_media_from_panel(event):
 
     if not telefono or not data_base64:
         return response(400, {"error": "phone and data_base64 are required"})
-
-    if media_type == "audio" and not is_supported_whatsapp_audio(mime_type):
-        return response(415, {
-            "error": "audio format is not supported by WhatsApp",
-            "mime_type": mime_type,
-        })
-    if media_type == "audio" and mime_type == "audio/mp4" and filename.lower().startswith("nota-de-voz-"):
-        return response(415, {
-            "error": "Las notas de voz grabadas en MP4/M4A desde el navegador no se entregan correctamente por WhatsApp. Usa OGG/Opus o adjunta un audio compatible desde archivo.",
-            "mime_type": mime_type,
-        })
 
     if "," in data_base64 and data_base64.lower().startswith("data:"):
         data_base64 = data_base64.split(",", 1)[1]
@@ -1552,12 +1658,35 @@ def send_media_from_panel(event):
         return response(413, {"error": "media is too large"})
 
     try:
+        if media_type == "audio":
+            data, filename, mime_type = transcode_audio_for_whatsapp(data, filename, mime_type)
+
+        validation_error = media_validation_error(filename, media_type, mime_type)
+        if validation_error:
+            return response(415, {
+                "error": validation_error,
+                "mime_type": mime_type,
+                "filename": filename,
+            })
+
+        if media_type == "audio" and not is_supported_whatsapp_audio(mime_type):
+            return response(415, {
+                "error": "audio format is not supported by WhatsApp",
+                "mime_type": mime_type,
+            })
+
         upload_result = upload_media_to_meta(data, filename, mime_type)
         media_id = str(upload_result.get("id") or "").strip()
         if not media_id:
             return response(502, {"error": "media upload did not return an id", "result": upload_result})
 
         send_result = enviar_whatsapp_media(telefono, media_type, media_id, filename, caption)
+        sent_messages = send_result.get("messages") if isinstance(send_result, dict) else None
+        if not isinstance(sent_messages, list) or not sent_messages:
+            return response(502, {
+                "error": "WhatsApp did not confirm the media message",
+                "result": send_result,
+            })
         media_url = f"meta-media:{media_id}"
         log_message = format_outbound_media_log(media_type, media_url, filename, mime_type, caption)
         guardar_mensaje(telefono, log_message, "salida", media_type, agent_username, agent_name)
@@ -1570,6 +1699,9 @@ def send_media_from_panel(event):
             "upload": upload_result,
             "result": send_result,
         })
+    except RuntimeError as exc:
+        logger.error("WhatsApp media processing failed error=%s", str(exc))
+        return response(500, {"error": str(exc)})
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
         logger.error("WhatsApp media send failed status=%s body=%s", exc.code, error_body[:5000])
@@ -1622,12 +1754,68 @@ def handle_call_webhook(value):
     return True
 
 
+def describe_message_status_error(status_item):
+    errors = status_item.get("errors") if isinstance(status_item.get("errors"), list) else []
+    if not errors:
+        return ""
+
+    error = errors[0] if isinstance(errors[0], dict) else {}
+    code = str(error.get("code") or "").strip()
+    title = str(error.get("title") or error.get("message") or "").strip()
+    details = error.get("error_data") if isinstance(error.get("error_data"), dict) else {}
+    detail_text = str(details.get("details") or error.get("details") or "").strip()
+
+    parts = []
+    if code:
+        parts.append(f"#{code}")
+    if title:
+        parts.append(title)
+    if detail_text:
+        parts.append(detail_text)
+    return " - ".join(parts)
+
+
+def handle_message_status_webhook(value):
+    statuses = value.get("statuses") if isinstance(value, dict) else None
+    if not isinstance(statuses, list) or not statuses:
+        return False
+
+    for status_item in statuses:
+        if not isinstance(status_item, dict):
+            continue
+
+        status = str(status_item.get("status") or "").strip()
+        message_id = str(status_item.get("id") or "").strip()
+        telefono = normalize_phone(status_item.get("recipient_id"))
+        error_text = describe_message_status_error(status_item)
+        logger.info(
+            "WhatsApp message status id=%s phone=%s status=%s errors=%s",
+            message_id,
+            telefono,
+            status,
+            json.dumps(status_item.get("errors") or [], default=json_default)[:2000],
+        )
+
+        if status == "failed" and telefono:
+            detail = f": {error_text}" if error_text else ""
+            guardar_mensaje(
+                telefono,
+                f"[Estado WhatsApp]: mensaje no entregado{detail}",
+                "salida",
+                "status",
+            )
+
+    return True
+
+
 def handle_whatsapp_webhook(event):
     try:
         body = parse_body(event)
         value = body["entry"][0]["changes"][0]["value"]
         if handle_call_webhook(value):
             return response(200, {"success": True, "mode": "calls"})
+        if handle_message_status_webhook(value):
+            return response(200, {"success": True, "mode": "statuses"})
 
         messages = value.get("messages")
         if not messages:

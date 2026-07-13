@@ -30,6 +30,10 @@ venv/
 htmlcov/
 .hypothesis/
 
+# Local Lambda layer build artifacts
+waba-bedrock-webhook/ffmpeg-layer.zip
+waba-bedrock-webhook/layers/
+
 # Google Service Account credentials
 **/danaconnect-calendar-bot*.json
 
