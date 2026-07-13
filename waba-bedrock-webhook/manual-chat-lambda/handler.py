@@ -417,10 +417,16 @@ def proxy_media(event):
         return response(500, {"error": "WHATSAPP_TOKEN/WHATSAPP_ACCESS_TOKEN is not configured"})
 
     params = event.get("queryStringParameters") or {}
+    media_id = str(params.get("id") or "").strip()
     media_url = str(params.get("url") or "").strip()
 
+    if media_id:
+        if not re.match(r"^[A-Za-z0-9_-]+$", media_id):
+            return response(400, {"error": "media id is not allowed"})
+        media_url = obtener_url_media(media_id) or ""
+
     if not media_url:
-        return response(400, {"error": "url is required"})
+        return response(400, {"error": "url or id is required"})
     if not is_allowed_media_url(media_url):
         return response(400, {"error": "media url is not allowed"})
 
@@ -1190,13 +1196,20 @@ def enviar_whatsapp(telefono, mensaje):
         return json.loads(res.read().decode("utf-8") or "{}")
 
 
+def clean_mime_type(mime_type):
+    clean_mime = str(mime_type or "application/octet-stream").split(";", 1)[0].strip().lower()
+    if clean_mime == "audio/m4a":
+        return "audio/mp4"
+    return clean_mime or "application/octet-stream"
+
+
 def upload_media_to_meta(data, filename, mime_type):
     if not WHATSAPP_TOKEN or not PHONE_NUMBER_ID:
         raise RuntimeError("Missing WHATSAPP_TOKEN/PHONE_NUMBER_ID environment variables")
 
     boundary = f"----chattlogger{datetime.now(timezone.utc).timestamp()}".replace(".", "")
     safe_filename = str(filename or "archivo").replace('"', "").replace("\r", "").replace("\n", "")[:180]
-    content_type = str(mime_type or "application/octet-stream").replace("\r", "").replace("\n", "")[:120]
+    content_type = clean_mime_type(mime_type).replace("\r", "").replace("\n", "")[:120]
 
     parts = [
         f"--{boundary}\r\n"
@@ -1474,7 +1487,7 @@ def normalize_outbound_media_type(value, mime_type):
 
 
 def is_supported_whatsapp_audio(mime_type):
-    clean_mime = str(mime_type or "").split(";", 1)[0].strip().lower()
+    clean_mime = clean_mime_type(mime_type)
     return clean_mime in {
         "audio/aac",
         "audio/mp4",
@@ -1506,7 +1519,7 @@ def send_media_from_panel(event):
     body = parse_body(event)
     telefono = normalize_phone(body.get("phone") or body.get("to") or body.get("telefono"))
     filename = str(body.get("filename") or "archivo").strip()
-    mime_type = str(body.get("mime_type") or body.get("content_type") or "application/octet-stream").strip()
+    mime_type = clean_mime_type(body.get("mime_type") or body.get("content_type") or "application/octet-stream")
     caption = str(body.get("caption") or "").strip()
     media_type = normalize_outbound_media_type(body.get("media_type"), mime_type)
     data_base64 = str(body.get("data_base64") or body.get("base64") or "").strip()
@@ -1519,6 +1532,11 @@ def send_media_from_panel(event):
     if media_type == "audio" and not is_supported_whatsapp_audio(mime_type):
         return response(415, {
             "error": "audio format is not supported by WhatsApp",
+            "mime_type": mime_type,
+        })
+    if media_type == "audio" and mime_type == "audio/mp4" and filename.lower().startswith("nota-de-voz-"):
+        return response(415, {
+            "error": "Las notas de voz grabadas en MP4/M4A desde el navegador no se entregan correctamente por WhatsApp. Usa OGG/Opus o adjunta un audio compatible desde archivo.",
             "mime_type": mime_type,
         })
 
@@ -1540,7 +1558,7 @@ def send_media_from_panel(event):
             return response(502, {"error": "media upload did not return an id", "result": upload_result})
 
         send_result = enviar_whatsapp_media(telefono, media_type, media_id, filename, caption)
-        media_url = obtener_url_media(media_id) or f"meta-media:{media_id}"
+        media_url = f"meta-media:{media_id}"
         log_message = format_outbound_media_log(media_type, media_url, filename, mime_type, caption)
         guardar_mensaje(telefono, log_message, "salida", media_type, agent_username, agent_name)
         mark_conversation_attended(telefono)

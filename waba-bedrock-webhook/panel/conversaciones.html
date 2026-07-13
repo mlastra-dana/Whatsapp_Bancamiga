@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>DANAConnect — ChattLogger</title>
+    <title>DANAConnect — WABA Center</title>
     <link rel="icon" type="image/png" href="assets/brand/favicon-danaconnect-transparent.png">
     <link rel="apple-touch-icon" href="assets/brand/favicon-danaconnect-transparent.png">
     <style>
@@ -2364,7 +2364,7 @@
                                 <path d="M12 10.5c.4-.4 1-.4 1.3.1l1.3 2.2c.2.4.2.8-.1 1.1l-1 1c1 2 2.5 3.5 4.5 4.5l1-1c.3-.3.8-.3 1.1-.1l2.2 1.3c.5.3.5.9.1 1.3-.8.9-2 1.4-3.2 1.1-5.3-1.2-9-4.9-10.2-10.2-.3-1.2.1-2.4 1-3.3Z"></path>
                             </svg>
                         </span>
-                        ChattLogger
+                        WABA Center
                     </button>
                     <button class="portal-app-btn" type="button"><span class="portal-app-icon portal-icon-validation"></span>Email Validation</button>
                     <button class="portal-app-btn" type="button">
@@ -2386,7 +2386,7 @@
             <div class="brand-lockup">
                 <img class="brand-logo" src="assets/brand/logo-danaconnect-horizontal.jpg" alt="DANAConnect">
                 <div class="product-title">
-                    <h1>ChattLogger</h1>
+                    <h1>WABA Center</h1>
                 </div>
             </div>
             <div class="topbar-actions">
@@ -2704,6 +2704,7 @@
         let mediaRecorder = null;
         let recordedAudioChunks = [];
         let isRecordingVoice = false;
+        let voiceRecordingStartedAt = 0;
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
@@ -2876,7 +2877,7 @@
             touchActivity();
             localStorage.setItem(ACTIVE_VIEW_STORAGE_KEY, 'chatlogger');
             if (options.pushHistory !== false && history.state?.view !== 'chatlogger') {
-                history.pushState({ view: 'chatlogger' }, '', '#ChattLogger');
+                history.pushState({ view: 'chatlogger' }, '', '#WABACenter');
             }
             document.getElementById('portal-home').style.display = 'none';
             document.getElementById('login-screen').style.display = 'none';
@@ -3068,6 +3069,10 @@
         }
 
         function proxiedMediaUrl(url) {
+            if (API_BASE_URL && String(url || '').startsWith('meta-media:')) {
+                const mediaId = String(url).slice('meta-media:'.length);
+                return `${API_BASE_URL}/media?id=${encodeURIComponent(mediaId)}`;
+            }
             if (!API_BASE_URL || !url || !isMetaMediaUrl(url)) return url;
             return `${API_BASE_URL}/media?url=${encodeURIComponent(url)}`;
         }
@@ -4509,8 +4514,8 @@
         function updateUnreadTitle() {
             const total = getTotalUnreadCount();
             document.title = total > 0
-                ? `(${total > 99 ? '99+' : total}) DANAConnect - ChattLogger`
-                : 'DANAConnect - ChattLogger';
+                ? `(${total > 99 ? '99+' : total}) DANAConnect - WABA Center`
+                : 'DANAConnect - WABA Center';
         }
 
         function markContactRead(phone) {
@@ -4939,11 +4944,12 @@
         function renderMessageContent(message) {
             const text = formatTemplatePlaceholders(message.message).trim();
             const templateActions = renderTemplateButtons(message);
-            const imageMatch = text.match(/^\[Imagen\]:\s*(https?:\/\/\S+)/i);
-            const audioMatch = text.match(/^\[Audio\]:\s*(https?:\/\/\S+)/i);
-            const stickerMatch = text.match(/^\[Sticker\]:\s*(https?:\/\/\S+)/i);
-            const videoMatch = text.match(/^\[Video\]:\s*(https?:\/\/\S+)/i);
-            const documentMatch = text.match(/^\[Documento\]:\s*([^|]+)\|\s*([^|]+)\|\s*(https?:\/\/\S+)/i);
+            const mediaRefPattern = '(https?:\\/\\/\\S+|meta-media:[A-Za-z0-9_-]+)';
+            const imageMatch = text.match(new RegExp(`^\\[Imagen\\]:\\s*${mediaRefPattern}`, 'i'));
+            const audioMatch = text.match(new RegExp(`^\\[Audio\\]:\\s*${mediaRefPattern}`, 'i'));
+            const stickerMatch = text.match(new RegExp(`^\\[Sticker\\]:\\s*${mediaRefPattern}`, 'i'));
+            const videoMatch = text.match(new RegExp(`^\\[Video\\]:\\s*${mediaRefPattern}`, 'i'));
+            const documentMatch = text.match(new RegExp(`^\\[Documento\\]:\\s*([^|]+)\\|\\s*([^|]+)\\|\\s*${mediaRefPattern}`, 'i'));
             const locationMatch = text.match(/^\[Ubicacion\]:\s*([-.\d]+),\s*([-.\d]+)(.*)$/i);
             const callMatch = text.match(/^\[Llamada\]:\s*(.*)$/i);
             const contactMatch = text.match(/^\[Contacto\]:\s*([\s\S]*)$/i);
@@ -5392,7 +5398,6 @@
             if (!window.MediaRecorder || !MediaRecorder.isTypeSupported) return '';
             return [
                 'audio/ogg;codecs=opus',
-                'audio/mp4',
             ].find(type => MediaRecorder.isTypeSupported(type)) || '';
         }
 
@@ -5425,11 +5430,14 @@
                 if (!mimeType) {
                     stream.getTracks().forEach(track => track.stop());
                     status.className = 'send-status error';
-                    status.textContent = 'Este navegador graba audio en un formato que WhatsApp no acepta directamente.';
+                    status.textContent = 'Este navegador no graba notas de voz en OGG/Opus, que es el formato que WhatsApp entrega mejor. Por ahora adjunta un .mp3, .aac, .amr u .ogg desde el clip.';
                     return;
                 }
                 recordedAudioChunks = [];
-                mediaRecorder = new MediaRecorder(stream, { mimeType });
+                mediaRecorder = new MediaRecorder(stream, {
+                    mimeType,
+                    audioBitsPerSecond: 128000,
+                });
                 mediaRecorder.ondataavailable = event => {
                     if (event.data && event.data.size > 0) recordedAudioChunks.push(event.data);
                 };
@@ -5437,17 +5445,25 @@
                     stream.getTracks().forEach(track => track.stop());
                     const finalMimeType = mediaRecorder.mimeType || mimeType || 'audio/webm';
                     const blob = new Blob(recordedAudioChunks, { type: finalMimeType });
+                    const durationMs = Date.now() - voiceRecordingStartedAt;
                     const extension = getVoiceExtension(finalMimeType);
                     const file = new File([blob], `nota-de-voz-${Date.now()}.${extension}`, { type: finalMimeType });
                     isRecordingVoice = false;
+                    voiceRecordingStartedAt = 0;
                     voiceBtn.classList.remove('recording');
                     voiceBtn.textContent = '🎙';
+                    if (!recordedAudioChunks.length || blob.size < 1200 || durationMs < 800) {
+                        status.className = 'send-status error';
+                        status.textContent = 'La nota de voz quedó vacía o muy corta. Graba al menos un segundo e intenta de nuevo.';
+                        return;
+                    }
                     status.className = 'send-status';
                     status.textContent = '';
                     setPendingMediaFile(file);
                 };
-                mediaRecorder.start();
+                mediaRecorder.start(250);
                 isRecordingVoice = true;
+                voiceRecordingStartedAt = Date.now();
                 voiceBtn.classList.add('recording');
                 voiceBtn.textContent = '■';
                 status.className = 'send-status';
