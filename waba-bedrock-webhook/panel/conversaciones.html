@@ -1041,6 +1041,8 @@
 
         .contact-item:hover { background: var(--surface-muted); }
         .contact-item.active { background: var(--lavender); border-left: 3px solid var(--violet); }
+        .contact-item.has-agent { border-left: 3px solid var(--agent-color, var(--violet)); }
+        .contact-item.has-agent.active { border-left-color: var(--agent-color, var(--violet)); }
         .contact-item.unread {
             background: #F2ECFF;
             border-left: 3px solid var(--violet);
@@ -1061,6 +1063,42 @@
             align-items: center;
             justify-content: space-between;
             gap: 10px;
+        }
+        .contact-agent-row {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 5px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 650;
+        }
+        .agent-chip {
+            width: 24px;
+            height: 24px;
+            min-width: 24px;
+            border-radius: 999px;
+            background: var(--agent-color, var(--violet));
+            color: #ffffff;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            font-weight: 850;
+            letter-spacing: 0;
+            line-height: 1;
+            box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.75);
+        }
+        .agent-chip.small {
+            width: 20px;
+            height: 20px;
+            min-width: 20px;
+            font-size: 9px;
+            box-shadow: none;
+        }
+        .agent-chip.message-agent {
+            margin-right: 5px;
+            vertical-align: middle;
         }
         .unread-badge {
             min-width: 22px;
@@ -1391,6 +1429,9 @@
             text-transform: uppercase;
             font-weight: 700;
             margin-bottom: 2px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
         }
 
         .message.outbound .direction { color: var(--violet); }
@@ -2115,6 +2156,50 @@
             justify-content: flex-end;
         }
 
+        .new-message-toast {
+            position: fixed;
+            right: 24px;
+            bottom: 24px;
+            width: min(360px, calc(100vw - 32px));
+            border: 1px solid rgba(245, 80, 35, 0.22);
+            border-radius: 8px;
+            background: #fff8f5;
+            box-shadow: 0 22px 70px rgba(15, 15, 31, 0.18);
+            padding: 14px;
+            display: none;
+            z-index: 75;
+            cursor: pointer;
+        }
+
+        .new-message-toast.open {
+            display: grid;
+            gap: 7px;
+        }
+
+        .new-message-title {
+            color: var(--violet);
+            font-size: 13px;
+            font-weight: 850;
+            text-transform: uppercase;
+        }
+
+        .new-message-name {
+            color: var(--navy);
+            font-size: 18px;
+            font-weight: 850;
+            line-height: 1.15;
+        }
+
+        .new-message-preview {
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.35;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+            overflow: hidden;
+        }
+
         .switch {
             position: relative;
             width: 48px;
@@ -2482,6 +2567,12 @@
         </div>
     </div>
 
+    <div class="new-message-toast" id="new-message-toast" aria-live="polite" onclick="openNewMessageToastConversation()">
+        <div class="new-message-title">Mensaje nuevo</div>
+        <div class="new-message-name" id="new-message-name">Cliente</div>
+        <div class="new-message-preview" id="new-message-preview"></div>
+    </div>
+
     <div class="modal-backdrop" id="contact-modal" aria-hidden="true">
         <form class="modal" id="contact-form">
             <div class="modal-header">
@@ -2667,6 +2758,7 @@
                 body: 'Gracias por escribirnos. En este momento nuestro equipo está fuera del horario de atención. Te responderemos el próximo día hábil.'
             }
         ];
+        const AGENT_COLORS = ['#f55023', '#4b16b6', '#168a55', '#c2410c', '#0f6cbf', '#9d174d', '#6b7280'];
 
         let allMessages = [];
         let contacts = {};
@@ -2706,10 +2798,65 @@
         let recordedAudioChunks = [];
         let isRecordingVoice = false;
         let voiceRecordingStartedAt = 0;
+        let newMessageToastTimer = null;
+        let latestToastPhone = '';
         let absenceBot = {
             enabled: false,
             message: 'Gracias por escribirnos. En este momento no hay un asesor disponible. Te responderemos apenas retomemos la atencion.',
         };
+
+        function hashString(value) {
+            return String(value || '').split('').reduce((hash, char) => {
+                return ((hash << 5) - hash + char.charCodeAt(0)) | 0;
+            }, 0);
+        }
+
+        function getAgentInitials(name, username = '') {
+            const source = String(name || username || 'Asesor').trim();
+            const explicitInitials = source.match(/\b[A-ZÁÉÍÓÚÑ]{2,4}\b/u);
+            if (explicitInitials) return explicitInitials[0].slice(0, 3).toUpperCase();
+
+            const parts = source
+                .replace(/[._-]+/g, ' ')
+                .split(/\s+/)
+                .filter(Boolean);
+            if (parts.length >= 2) return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
+            return source.slice(0, 2).toUpperCase();
+        }
+
+        function getAgentColor(username, name = '') {
+            const key = String(username || name || 'asesor').toLowerCase();
+            if (key.includes('ssalas') || key.includes('sarina')) return '#f55023';
+            if (key.includes('murquiola') || key.includes('urquiola') || key.includes('mv')) return '#4b16b6';
+            return AGENT_COLORS[Math.abs(hashString(key)) % AGENT_COLORS.length];
+        }
+
+        function getMessageAgent(message) {
+            if (!message || message.direction === 'inbound') return null;
+            const username = String(message.agent_username || '').trim();
+            const name = String(message.agent_name || username || '').trim();
+            if (!username && !name) return null;
+            return {
+                username,
+                name: name || username,
+                initials: getAgentInitials(name, username),
+                color: getAgentColor(username, name),
+            };
+        }
+
+        function getContactAgent(contact) {
+            if (!contact || !Array.isArray(contact.messages)) return null;
+            for (let index = contact.messages.length - 1; index >= 0; index -= 1) {
+                const agent = getMessageAgent(contact.messages[index]);
+                if (agent) return agent;
+            }
+            return null;
+        }
+
+        function renderAgentChip(agent, extraClass = '') {
+            if (!agent) return '';
+            return `<span class="agent-chip ${extraClass}" style="--agent-color:${escapeHtml(agent.color)}" title="${escapeHtml(agent.name)}">${escapeHtml(agent.initials)}</span>`;
+        }
 
         function getEmbeddedAgent() {
             const params = new URLSearchParams(window.location.search);
@@ -4251,6 +4398,36 @@
             });
         }
 
+        function cleanNotificationPreview(message) {
+            return String(message || '')
+                .replace(/^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto)\]:\s*/i, '$1: ')
+                .replace(/\s+/g, ' ')
+                .trim()
+                .slice(0, 140) || 'Mensaje recibido';
+        }
+
+        function showNewMessageToast(message) {
+            if (!message || !message.phone_number) return;
+            const toast = document.getElementById('new-message-toast');
+            if (!toast) return;
+
+            latestToastPhone = message.phone_number;
+            document.getElementById('new-message-name').textContent = getContactName(message.phone_number) || message.phone_number;
+            document.getElementById('new-message-preview').textContent = cleanNotificationPreview(message.message);
+            toast.classList.add('open');
+
+            if (newMessageToastTimer) clearTimeout(newMessageToastTimer);
+            newMessageToastTimer = setTimeout(() => {
+                toast.classList.remove('open');
+            }, 9000);
+        }
+
+        function openNewMessageToastConversation() {
+            if (!latestToastPhone) return;
+            document.getElementById('new-message-toast')?.classList.remove('open');
+            selectContact(latestToastPhone);
+        }
+
         function showIncomingCallNotification(phone) {
             if (!notificationsEnabled) return;
             const name = getContactName(phone) || phone;
@@ -4458,6 +4635,58 @@
             return Object.values(contacts).filter(contact => getUnreadCount(contact) > 0).length;
         }
 
+        function contactMatchesCurrentSearch(contact) {
+            const query = normalize(searchTerm);
+            if (!query) return true;
+            const haystack = normalize([
+                contact.phone,
+                getContactName(contact.phone),
+                contact.lastMessage,
+            ].join(' '));
+            return haystack.includes(query);
+        }
+
+        function getVisibleContacts() {
+            return Object.values(contacts)
+                .filter(contactMatchesCurrentSearch)
+                .sort((a, b) => {
+                    const unreadDelta = getUnreadCount(b) - getUnreadCount(a);
+                    if (unreadDelta !== 0) return unreadDelta;
+                    return b.lastTime.localeCompare(a.lastTime);
+                });
+        }
+
+        function hasActiveConversationFilters() {
+            return Boolean(searchTerm || dateFrom || dateTo);
+        }
+
+        function clearSelectedChatView(message = '') {
+            selectedPhone = null;
+            selectedContactRenderKey = '';
+            document.getElementById('chat-header-bar').style.display = 'none';
+            document.getElementById('composer-panel').style.display = 'none';
+            document.getElementById('template-strip').style.display = 'none';
+            document.getElementById('edit-contact-btn').style.display = 'none';
+            document.getElementById('chat-messages').innerHTML = `<div class="empty-state">${escapeHtml(message)}</div>`;
+        }
+
+        function syncSelectedContactWithFilters() {
+            const visibleContacts = getVisibleContacts();
+            if (selectedPhone && visibleContacts.some(contact => contact.phone === selectedPhone)) {
+                return visibleContacts;
+            }
+            if (hasActiveConversationFilters()) {
+                if (visibleContacts.length > 0) {
+                    selectedPhone = visibleContacts[0].phone;
+                    selectedContactRenderKey = '';
+                    renderSelectedContact({ forceScrollBottom: true });
+                } else {
+                    clearSelectedChatView(searchTerm ? 'No hay conversaciones que coincidan con la búsqueda' : 'No hay conversaciones en ese rango');
+                }
+            }
+            return visibleContacts;
+        }
+
         function updateDashboard() {
             const agentCount = onlineAgents.length;
             const pendingChats = getPendingChatsCount();
@@ -4469,8 +4698,8 @@
                 : 'Sin conectados';
             document.getElementById('pending-chats-count').textContent = String(pendingChats);
             document.getElementById('pending-chats-detail').textContent = unreadMessages
-                ? ''
-                : '';
+                ? `${unreadMessages} mensaje${unreadMessages === 1 ? '' : 's'} sin atender`
+                : 'Sin pendientes';
         }
 
         function messageId(message) {
@@ -4567,22 +4796,20 @@
         function applyDateFilters() {
             syncDateFilters();
             processMessages();
+            syncSelectedContactWithFilters();
             renderContacts();
             if (selectedPhone && contacts[selectedPhone]) renderSelectedContact();
-            else {
-                selectedPhone = null;
-                document.getElementById('chat-header-bar').style.display = 'none';
-                document.getElementById('composer-panel').style.display = 'none';
-                document.getElementById('template-strip').style.display = 'none';
-                document.getElementById('edit-contact-btn').style.display = 'none';
-                document.getElementById('chat-messages').innerHTML = '<div class="empty-state"></div>';
+            else if (!hasActiveConversationFilters()) {
+                clearSelectedChatView();
                 selectLatestContact();
             }
         }
 
         function applySearch() {
             searchTerm = document.getElementById('search-input').value.trim();
+            syncSelectedContactWithFilters();
             renderContacts();
+            if (selectedPhone && contacts[selectedPhone]) renderSelectedContact();
         }
 
         function clearDateFilters() {
@@ -4727,9 +4954,9 @@
                         startIncomingCallRingtone(messageId(incomingCall));
                         showIncomingCallNotification(incomingCall.phone_number);
                         showIncomingCallToast(incomingCall);
-                    } else {
-                        playNotificationSound();
                     }
+                    const latestMessage = [...sortedNewInbound].reverse().find(message => !isAnswerableCall(message));
+                    if (latestMessage) showNewMessageToast(latestMessage);
                     sortedNewInbound.forEach(message => {
                         if (!isAnswerableCall(message)) {
                             showBrowserNotification(message.phone_number, message.message || '');
@@ -4748,10 +4975,10 @@
                 if (isInitialLoad && Object.keys(readState).length === 0) {
                     initializeReadStateFromCurrentContacts();
                 }
-                if (selectedPhone && contacts[selectedPhone]) markContactRead(selectedPhone);
+                syncSelectedContactWithFilters();
                 renderContacts();
                 if (selectedPhone && contacts[selectedPhone]) renderSelectedContact();
-                else selectLatestContact();
+                else if (!hasActiveConversationFilters()) selectLatestContact();
             } catch (error) {
                 console.error('Error:', error);
                 document.getElementById('contacts-list').innerHTML =
@@ -4796,20 +5023,7 @@
         function renderContacts() {
             const list = document.getElementById('contacts-list');
             const query = normalize(searchTerm);
-            const sorted = Object.values(contacts)
-                .filter(contact => {
-                    const haystack = normalize([
-                        contact.phone,
-                        getContactName(contact.phone),
-                        contact.lastMessage,
-                    ].join(' '));
-                    return !query || haystack.includes(query);
-                })
-                .sort((a, b) => {
-                    const unreadDelta = getUnreadCount(b) - getUnreadCount(a);
-                    if (unreadDelta !== 0) return unreadDelta;
-                    return b.lastTime.localeCompare(a.lastTime);
-                });
+            const sorted = getVisibleContacts();
 
             if (sorted.length === 0) {
                 list.innerHTML = `<div class="empty-state">${query ? 'No hay resultados para la búsqueda' : 'No hay conversaciones aún'}</div>`;
@@ -4824,18 +5038,25 @@
                 const activeClass = contact.phone === selectedPhone ? ' active' : '';
                 const unreadCount = getUnreadCount(contact);
                 const unreadClass = unreadCount > 0 ? ' unread' : '';
+                const contactAgent = getContactAgent(contact);
+                const agentClass = contactAgent ? ' has-agent' : '';
+                const agentStyle = contactAgent ? ` style="--agent-color:${escapeHtml(contactAgent.color)}"` : '';
                 const meta = contact.messageCount
                     ? `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}`
                     : `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}Contacto guardado`;
                 const preview = contact.lastMessage
                     ? `<div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>`
                     : '';
-                return `<button class="contact-item${activeClass}${unreadClass}" data-phone="${escapeHtml(contact.phone)}">
+                const agentRow = contactAgent
+                    ? `<div class="contact-agent-row">${renderAgentChip(contactAgent, 'small')} <span>Atiende ${escapeHtml(contactAgent.initials)}</span></div>`
+                    : '';
+                return `<button class="contact-item${activeClass}${unreadClass}${agentClass}"${agentStyle} data-phone="${escapeHtml(contact.phone)}">
                     <div class="contact-row">
                         <div class="phone">${contactName ? '👤 ' + escapeHtml(contactName) : '📱 ' + escapeHtml(contact.phone)}</div>
                         ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>` : ''}
                     </div>
                     <div class="meta">${meta}</div>
+                    ${agentRow}
                     ${preview}
                 </button>`;
             }).join('');
@@ -4848,10 +5069,11 @@
             updateDashboard();
         }
 
-        function selectContact(phone) {
+        function selectContact(phone, options = {}) {
+            const shouldMarkRead = options.markRead !== false;
             selectedPhone = phone;
             selectedContactRenderKey = '';
-            markContactRead(phone);
+            if (shouldMarkRead) markContactRead(phone);
             renderContacts();
             renderSelectedContact({ forceScrollBottom: true });
         }
@@ -5114,13 +5336,16 @@
             renderTemplateChips();
 
             const contactName = getContactName(selectedPhone);
+            const contactAgent = getContactAgent(contact);
+            const headerBar = document.getElementById('chat-header-bar');
+            headerBar.style.borderLeft = contactAgent ? `4px solid ${contactAgent.color}` : '';
             document.getElementById('edit-contact-btn').style.display = contactName ? 'none' : 'inline-flex';
             document.getElementById('chat-header').textContent = contactName
                 ? contactName
                 : selectedPhone;
             document.getElementById('chat-subtitle').textContent = contactName
-                ? `${selectedPhone} · ${contact.messageCount} mensajes`
-                : `${contact.messageCount} mensajes`;
+                ? `${selectedPhone} · ${contact.messageCount} mensajes${contactAgent ? ` · Atiende ${contactAgent.initials}` : ''}`
+                : `${contact.messageCount} mensajes${contactAgent ? ` · Atiende ${contactAgent.initials}` : ''}`;
 
             const messagesDiv = document.getElementById('chat-messages');
             if (contact.messages.length === 0) {
@@ -5150,6 +5375,7 @@
                     month: 'short', day: 'numeric'
                 }) : '';
                 const advisorLabel = message.agent_name || message.agent_username || 'Asesor';
+                const messageAgent = getMessageAgent(message);
                 const direction = message.direction === 'inbound'
                     ? '👤 Cliente'
                     : message.msg_type === 'template'
@@ -5170,9 +5396,10 @@
                             : /^\[Sticker\]:/i.test(formattedMessage)
                                 ? ' sticker-message'
                                 : /^\[Contacto\]:/i.test(formattedMessage)
-                                    ? ' contact-message'
+                                ? ' contact-message'
                                     : '';
-                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}"><div class="direction">${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
+                const agentStyle = messageAgent ? ` style="--agent-color:${escapeHtml(messageAgent.color)}"` : '';
+                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}"${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
             setChatScrollPosition(messagesDiv, {
