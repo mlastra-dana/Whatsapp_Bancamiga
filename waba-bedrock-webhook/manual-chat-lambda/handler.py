@@ -1193,6 +1193,7 @@ def normalizar_log_para_panel(item):
         "message": item.get("mensaje") or item.get("message") or "",
         "msg_type": item.get("msg_type") or tipo,
         "canal": item.get("canal", "whatsapp"),
+        "provider": item.get("provider") or "",
         "agent_username": item.get("agent_username") or "",
         "agent_name": item.get("agent_name") or "",
         "call_id": item.get("call_id") or "",
@@ -1761,6 +1762,9 @@ def describe_message_status_error(status_item):
 
     error = errors[0] if isinstance(errors[0], dict) else {}
     code = str(error.get("code") or "").strip()
+    if code == "131047":
+        return "#131047 - La ventana de 24 horas está cerrada. Envía una plantilla aprobada para reactivar el chat."
+
     title = str(error.get("title") or error.get("message") or "").strip()
     details = error.get("error_data") if isinstance(error.get("error_data"), dict) else {}
     detail_text = str(details.get("details") or error.get("details") or "").strip()

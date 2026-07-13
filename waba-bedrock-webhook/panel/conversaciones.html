@@ -1387,6 +1387,28 @@
         .send-status.error { color: var(--danger); }
         .send-status.success { color: var(--success); }
 
+        .delivery-status-card {
+            border: 1px solid rgba(178, 24, 24, 0.18);
+            border-radius: 8px;
+            background: #fff7f7;
+            padding: 10px 12px;
+            color: var(--text);
+        }
+
+        .delivery-status-card strong {
+            display: block;
+            color: var(--danger);
+            font-size: 13px;
+            margin-bottom: 4px;
+        }
+
+        .delivery-status-card span {
+            display: block;
+            color: var(--muted);
+            font-size: 12px;
+            line-height: 1.35;
+        }
+
         .message {
             max-width: min(640px, 70%);
             padding: 10px 13px;
@@ -5017,6 +5039,16 @@
                 contact.lastTime = last.timestamp || '';
             });
 
+            Object.entries(contacts).forEach(([phone, contact]) => {
+                const hasInbound = contact.messages.some(message => message.direction === 'inbound');
+                const onlyOutboundTemplatesOrStatuses = contact.messages.every(message =>
+                    message.direction === 'outbound' && ['template', 'status'].includes(message.msg_type)
+                );
+                if (!hasInbound && onlyOutboundTemplatesOrStatuses) {
+                    delete contacts[phone];
+                }
+            });
+
             syncSavedContactsIntoConversations();
         }
 
@@ -5176,6 +5208,19 @@
             const locationMatch = text.match(/^\[Ubicacion\]:\s*([-.\d]+),\s*([-.\d]+)(.*)$/i);
             const callMatch = text.match(/^\[Llamada\]:\s*(.*)$/i);
             const contactMatch = text.match(/^\[Contacto\]:\s*([\s\S]*)$/i);
+            const statusMatch = text.match(/^\[Estado WhatsApp\]:\s*(.*)$/i);
+
+            if (statusMatch) {
+                const detail = statusMatch[1].trim();
+                const isWindowClosed = detail.includes('#131047') || /24\s*hours/i.test(detail) || /ventana de 24 horas/i.test(detail);
+                const readableDetail = isWindowClosed
+                    ? 'La ventana de 24 horas está cerrada. Envía una plantilla aprobada para reactivar el chat; cuando el cliente responda, podrás escribir manualmente otra vez.'
+                    : detail.replace(/^mensaje no entregado:?\s*/i, '') || 'Meta no pudo entregar este mensaje.';
+                return `<div class="delivery-status-card">
+                    <strong>No entregado</strong>
+                    <span>${escapeHtml(readableDetail)}</span>
+                </div>`;
+            }
 
             if (imageMatch) {
                 const url = imageMatch[1];
@@ -5304,7 +5349,7 @@
 
         function isRichMessageContent(message) {
             const text = formatTemplatePlaceholders(message.message).trim();
-            return message.msg_type === 'template' || /^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto)\]:/i.test(text);
+            return message.msg_type === 'template' || /^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto|Estado WhatsApp)\]:/i.test(text);
         }
 
         function setChatScrollPosition(messagesDiv, options) {
