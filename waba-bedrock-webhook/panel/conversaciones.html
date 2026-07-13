@@ -1064,14 +1064,11 @@
             justify-content: space-between;
             gap: 10px;
         }
-        .contact-agent-row {
-            display: flex;
+        .contact-indicators {
+            display: inline-flex;
             align-items: center;
             gap: 6px;
-            margin-top: 5px;
-            color: var(--muted);
-            font-size: 11px;
-            font-weight: 650;
+            flex: 0 0 auto;
         }
         .agent-chip {
             width: 24px;
@@ -2985,6 +2982,10 @@
             return lastActivity > 0 && Date.now() - lastActivity > INACTIVITY_TIMEOUT_MS;
         }
 
+        function hasStoredActivity() {
+            return Number(localStorage.getItem(LAST_ACTIVITY_STORAGE_KEY) || 0) > 0;
+        }
+
         function enterPanel(agent = null) {
             const loginAgent = agent || getDemoAgent(
                 document.getElementById('login-username')?.value,
@@ -4673,10 +4674,27 @@
                             name: agent.name || agent.username,
                         }))
                     : [];
+                ensureCurrentAgentIsOnline();
                 updateDashboard();
             } catch (error) {
                 console.warn('No se pudieron cargar asesores:', error);
+                ensureCurrentAgentIsOnline();
+                updateDashboard();
             }
+        }
+
+        function ensureCurrentAgentIsOnline() {
+            if (!currentAgent || !currentAgent.username) return;
+            const exists = onlineAgents.some(agent => agent.username === currentAgent.username);
+            if (exists) return;
+            onlineAgents = [
+                {
+                    username: currentAgent.username,
+                    name: currentAgent.name || currentAgent.username,
+                    online: true,
+                },
+                ...onlineAgents,
+            ];
         }
 
         function getPendingChatsCount() {
@@ -4736,6 +4754,7 @@
         }
 
         function updateDashboard() {
+            ensureCurrentAgentIsOnline();
             const agentCount = onlineAgents.length;
             const pendingChats = getPendingChatsCount();
             const unreadMessages = getTotalUnreadCount();
@@ -5105,16 +5124,16 @@
                 const preview = contact.lastMessage
                     ? `<div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>`
                     : '';
-                const agentRow = contactAgent
-                    ? `<div class="contact-agent-row">${renderAgentChip(contactAgent, 'small')} <span>Atiende ${escapeHtml(contactAgent.initials)}</span></div>`
-                    : '';
+                const indicators = [
+                    contactAgent ? renderAgentChip(contactAgent, 'small') : '',
+                    unreadCount > 0 ? `<span class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>` : '',
+                ].filter(Boolean).join('');
                 return `<button class="contact-item${activeClass}${unreadClass}${agentClass}"${agentStyle} data-phone="${escapeHtml(contact.phone)}">
                     <div class="contact-row">
                         <div class="phone">${contactName ? '👤 ' + escapeHtml(contactName) : '📱 ' + escapeHtml(contact.phone)}</div>
-                        ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>` : ''}
+                        ${indicators ? `<div class="contact-indicators">${indicators}</div>` : ''}
                     </div>
                     <div class="meta">${meta}</div>
-                    ${agentRow}
                     ${preview}
                 </button>`;
             }).join('');
@@ -5415,8 +5434,8 @@
                 ? contactName
                 : selectedPhone;
             document.getElementById('chat-subtitle').textContent = contactName
-                ? `${selectedPhone} · ${contact.messageCount} mensajes${contactAgent ? ` · Atiende ${contactAgent.initials}` : ''}`
-                : `${contact.messageCount} mensajes${contactAgent ? ` · Atiende ${contactAgent.initials}` : ''}`;
+                ? `${selectedPhone} · ${contact.messageCount} mensajes`
+                : `${contact.messageCount} mensajes`;
 
             const messagesDiv = document.getElementById('chat-messages');
             if (contact.messages.length === 0) {
@@ -6011,6 +6030,10 @@
                     sendAgentPresence(false, savedAgent);
                     clearSessionStorage();
                     setLoginError('Sesión cerrada por inactividad.');
+                    document.getElementById('login-username').focus();
+                } else if (savedAgent && savedAgent.username && !hasStoredActivity()) {
+                    clearSessionStorage();
+                    setLoginError('');
                     document.getElementById('login-username').focus();
                 } else if (savedAgent && savedAgent.username) {
                     enterPanel(savedAgent);
