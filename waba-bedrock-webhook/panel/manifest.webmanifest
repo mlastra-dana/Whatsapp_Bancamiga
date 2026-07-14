@@ -1,0 +1,25 @@
+{
+  "name": "DANAConnect WABA Center",
+  "short_name": "WABA Center",
+  "description": "Centro operativo de WhatsApp Business para DANAConnect.",
+  "start_url": "waba-center.html#WABACenter",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#F05A28",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "assets/brand/icon-cropped.png",
+      "sizes": "480x480",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "assets/brand/favicon-danaconnect-transparent.png",
+      "sizes": "2048x2048",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}

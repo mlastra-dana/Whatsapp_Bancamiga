@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="theme-color" content="#F05A28">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-title" content="WABA Center">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <title>DANAConnect — WABA Center</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="assets/brand/favicon-danaconnect-transparent.png">
+    <link rel="apple-touch-icon" href="assets/brand/favicon-danaconnect-transparent.png">
+</head>
+<body>
+    <script>
+        fetch('conversaciones.html', { cache: 'no-store' })
+            .then(response => {
+                if (!response.ok) throw new Error('No se pudo cargar WABA Center');
+                return response.text();
+            })
+            .then(html => {
+                document.open();
+                document.write(html);
+                document.close();
+            })
+            .catch(() => {
+                window.location.replace('conversaciones.html#WABACenter');
+            });
+    </script>
+</body>
+</html>
