@@ -207,20 +207,63 @@ def get_contact_phone_value(data):
     )
 
 
+def is_unresolved_template_value(value):
+    text = str(value or "").strip()
+    normalized = normalize_text(text)
+    return (
+        not text
+        or "$s{" in text
+        or normalized in {"nombrecliente", "nombre cliente", "client_name", "customer_name"}
+    )
+
+
+def get_sent_template_body_text_parameters(data):
+    if not isinstance(data, dict):
+        return []
+
+    template = data.get("template") if isinstance(data.get("template"), dict) else data
+    components = template.get("components") if isinstance(template.get("components"), list) else []
+    values = []
+
+    for component in components:
+        if not isinstance(component, dict):
+            continue
+        if str(component.get("type") or "").lower() != "body":
+            continue
+        parameters = component.get("parameters") if isinstance(component.get("parameters"), list) else []
+        for parameter in parameters:
+            if not isinstance(parameter, dict):
+                continue
+            if str(parameter.get("type") or "").lower() != "text":
+                continue
+            value = str(parameter.get("text") or "").strip()
+            if value:
+                values.append(value)
+
+    return values
+
+
 def get_contact_name_value(data):
     if not isinstance(data, dict):
         return ""
     first_name = str(data.get("first_name") or data.get("FirstName") or "").strip()
     last_name = str(data.get("last_name") or data.get("LastName") or "").strip()
-    return str(
+    candidates = [
         data.get("name")
-        or data.get("nombre")
-        or data.get("NombreCliente")
-        or data.get("NOMBRECLIENTE")
-        or data.get("Nombre")
-        or " ".join(part for part in [first_name, last_name] if part)
-        or ""
-    ).strip()
+        or "",
+        data.get("nombre") or "",
+        data.get("NombreCliente") or "",
+        data.get("NOMBRECLIENTE") or "",
+        data.get("Nombre") or "",
+        " ".join(part for part in [first_name, last_name] if part),
+        *get_sent_template_body_text_parameters(data),
+    ]
+
+    for candidate in candidates:
+        text = str(candidate or "").strip()
+        if text and not is_unresolved_template_value(text):
+            return text
+    return ""
 
 
 def get_business_phone_from_webhook(value):
@@ -1009,6 +1052,20 @@ def get_template_body_text(template_definition):
     return ""
 
 
+def render_template_body_text(template_definition, sent_template):
+    text = get_template_body_text(template_definition)
+    if not text:
+        return ""
+
+    parameters = get_sent_template_body_text_parameters(sent_template)
+    for index, value in enumerate(parameters, start=1):
+        clean_value = str(value or "").strip()
+        if is_unresolved_template_value(clean_value):
+            clean_value = "NombreCliente"
+        text = re.sub(r"\{\{\s*" + str(index) + r"\s*\}\}", clean_value, text)
+    return text.strip()
+
+
 def format_template_message_text(text):
     return re.sub(r"\{\{\s*\d+\s*\}\}", "NombreCliente", str(text or "")).strip()
 
@@ -1217,7 +1274,7 @@ def guardar_template_dana(event):
     meta_template = fetch_meta_template_cached(template_id) if template_id else {}
 
     if not mensaje and meta_template:
-        mensaje = get_template_body_text(meta_template)
+        mensaje = render_template_body_text(meta_template, template) or get_template_body_text(meta_template)
 
     mensaje = format_template_message_text(mensaje)
 

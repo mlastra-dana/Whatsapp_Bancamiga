@@ -3257,8 +3257,11 @@
 
         function getContactName(phone) {
             const contact = getContactInfo(phone);
-            if (!contact) return null;
-            return contact.name || contact.nombre || [contact.first_name, contact.last_name].filter(Boolean).join(' ') || null;
+            const savedName = contact
+                ? contact.name || contact.nombre || [contact.first_name, contact.last_name].filter(Boolean).join(' ')
+                : '';
+            if (savedName) return savedName;
+            return getTemplateContactNameFromConversation(phone);
         }
 
         function escapeHtml(value) {
@@ -5175,6 +5178,40 @@
             return message && typeof message.template_payload === 'object' && message.template_payload
                 ? message.template_payload
                 : {};
+        }
+
+        function isUnresolvedTemplateValue(value) {
+            const text = String(value || '').trim();
+            const normalizedText = normalize(text);
+            return !text || text.includes('$s{') || ['nombrecliente', 'nombre cliente', 'client name', 'customer name'].includes(normalizedText);
+        }
+
+        function getTemplatePayloadBodyTextParameters(messageOrPayload) {
+            const payload = messageOrPayload && messageOrPayload.template
+                ? messageOrPayload
+                : getTemplatePayload(messageOrPayload);
+            const template = payload.template && typeof payload.template === 'object'
+                ? payload.template
+                : {};
+            const components = Array.isArray(template.components) ? template.components : [];
+            const body = components.find(component => component && String(component.type || '').toLowerCase() === 'body');
+            const parameters = body && Array.isArray(body.parameters) ? body.parameters : [];
+            return parameters
+                .filter(parameter => parameter && String(parameter.type || '').toLowerCase() === 'text')
+                .map(parameter => String(parameter.text || '').trim())
+                .filter(value => value && !isUnresolvedTemplateValue(value));
+        }
+
+        function getTemplateContactNameFromConversation(phone) {
+            const normalizedPhone = normalizePhone(phone);
+            const contact = contacts[normalizedPhone] || contacts[phone];
+            if (!contact || !Array.isArray(contact.messages)) return null;
+
+            for (const message of contact.messages) {
+                const values = getTemplatePayloadBodyTextParameters(message);
+                if (values.length) return values[0];
+            }
+            return null;
         }
 
         function getTemplatePayloadButtons(message) {
