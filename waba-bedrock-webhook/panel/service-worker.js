@@ -1,4 +1,4 @@
-const CACHE_NAME = 'waba-center-v2';
+const CACHE_NAME = 'waba-center-v3';
 const APP_SHELL = [
   './',
   './waba-center.html',
