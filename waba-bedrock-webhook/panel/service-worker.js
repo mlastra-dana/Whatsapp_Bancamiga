@@ -1,4 +1,4 @@
-const CACHE_NAME = 'waba-center-v1';
+const CACHE_NAME = 'waba-center-v2';
 const APP_SHELL = [
   './',
   './waba-center.html',
@@ -7,7 +7,8 @@ const APP_SHELL = [
   './manifest.webmanifest',
   './assets/brand/logo-danaconnect-horizontal.jpg',
   './assets/brand/favicon-danaconnect-transparent.png',
-  './assets/brand/icon-cropped.png'
+  './assets/brand/waba-center-icon-192.png',
+  './assets/brand/waba-center-icon-512.png'
 ];
 
 self.addEventListener('install', event => {
