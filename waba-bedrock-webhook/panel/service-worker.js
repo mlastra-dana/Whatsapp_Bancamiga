@@ -6,7 +6,7 @@ const APP_SHELL = [
   './config.js',
   './manifest.webmanifest',
   './assets/brand/logo-danaconnect-horizontal.jpg',
-  './assets/brand/favicon-danaconnect-transparent.png',
+  './assets/brand/Dana-favicon.png',
   './assets/brand/waba-center-icon-192.png',
   './assets/brand/waba-center-icon-512.png'
 ];
