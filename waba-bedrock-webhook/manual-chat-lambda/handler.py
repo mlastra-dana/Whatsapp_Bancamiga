@@ -608,7 +608,7 @@ def update_absence_bot(event):
 def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_username="", agent_name=""):
     if conversations_table is None:
         logger.warning("CONVERSATIONS_TABLE_NAME is not configured; message was not logged")
-        return
+        return None
 
     tipo = "entrada" if direccion in {"entrada", "inbound"} else "salida"
     item = {
@@ -624,6 +624,7 @@ def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_usernam
     if agent_name:
         item["agent_name"] = str(agent_name)[:160]
     conversations_table.put_item(Item=item)
+    return item
 
 
 def guardar_evento_llamada(telefono, descripcion, direccion="salida", call_id="", agent_username="", agent_name="", payload=None):
@@ -1717,9 +1718,22 @@ def send_message_from_panel(event):
 
     try:
         result = enviar_whatsapp(telefono, mensaje)
-        guardar_mensaje(telefono, mensaje, "salida", "manual", agent_username, agent_name)
+        logged_item = guardar_mensaje(telefono, mensaje, "salida", "manual", agent_username, agent_name)
         mark_conversation_attended(telefono)
-        return response(200, {"success": True, "result": result})
+        return response(200, {
+            "success": True,
+            "result": result,
+            "message": normalizar_log_para_panel(logged_item) if logged_item else {
+                "phone_number": telefono,
+                "timestamp": now_iso(),
+                "direction": "outbound",
+                "message": mensaje,
+                "msg_type": "manual",
+                "canal": "whatsapp",
+                "agent_username": agent_username,
+                "agent_name": agent_name,
+            },
+        })
     except urllib.error.HTTPError as exc:
         error_body = exc.read().decode("utf-8", errors="replace")
         logger.error("WhatsApp send failed status=%s body=%s", exc.code, error_body)

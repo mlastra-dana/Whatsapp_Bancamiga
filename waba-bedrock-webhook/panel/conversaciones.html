@@ -4788,6 +4788,28 @@
             ].join('|');
         }
 
+        function sameManualMessage(a, b) {
+            if (!a || !b) return false;
+            const firstTime = parseMessageTime(a);
+            const secondTime = parseMessageTime(b);
+            if (firstTime === null || secondTime === null || Math.abs(firstTime - secondTime) > 120000) return false;
+            return (
+                normalizePhone(a.phone_number) === normalizePhone(b.phone_number) &&
+                String(a.direction || '') === String(b.direction || '') &&
+                String(a.msg_type || '') === String(b.msg_type || '') &&
+                String(a.message || '') === String(b.message || '') &&
+                String(a.agent_username || '') === String(b.agent_username || '')
+            );
+        }
+
+        function upsertLocalMessage(message) {
+            if (!message || !message.phone_number || !message.timestamp) return;
+            allMessages = allMessages.filter(existing =>
+                messageId(existing) !== messageId(message) && !sameManualMessage(existing, message)
+            );
+            allMessages.push(message);
+        }
+
         function compareTimestamp(a, b) {
             return String(a || '').localeCompare(String(b || ''));
         }
@@ -5583,13 +5605,11 @@
                     }),
                 });
 
-                if (!response.ok) {
-                    const err = await response.json().catch(() => ({}));
-                    throw new Error(err.error || 'No se pudo enviar');
-                }
+                const data = await response.json().catch(() => ({}));
+                if (!response.ok) throw new Error(data.error || 'No se pudo enviar');
 
                 input.value = '';
-                allMessages.push({
+                upsertLocalMessage(data.message || {
                     phone_number: selectedPhone,
                     timestamp: new Date().toISOString(),
                     direction: 'outbound',
