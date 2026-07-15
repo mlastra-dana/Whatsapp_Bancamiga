@@ -605,7 +605,7 @@ def update_absence_bot(event):
     return response(200, save_absence_bot_config(enabled, message))
 
 
-def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_username="", agent_name=""):
+def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_username="", agent_name="", client_message_id=""):
     if conversations_table is None:
         logger.warning("CONVERSATIONS_TABLE_NAME is not configured; message was not logged")
         return None
@@ -623,6 +623,8 @@ def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_usernam
         item["agent_username"] = str(agent_username)[:80]
     if agent_name:
         item["agent_name"] = str(agent_name)[:160]
+    if client_message_id:
+        item["client_message_id"] = str(client_message_id)[:120]
     conversations_table.put_item(Item=item)
     return item
 
@@ -1331,6 +1333,7 @@ def normalizar_log_para_panel(item):
         "msg_type": item.get("msg_type") or tipo,
         "canal": item.get("canal", "whatsapp"),
         "provider": item.get("provider") or "",
+        "client_message_id": item.get("client_message_id") or "",
         "agent_username": item.get("agent_username") or "",
         "agent_name": item.get("agent_name") or "",
         "call_id": item.get("call_id") or "",
@@ -1712,13 +1715,22 @@ def send_message_from_panel(event):
     mensaje = str(body.get("message", "")).strip()
     agent_username = str(body.get("agent_username") or "").strip()
     agent_name = str(body.get("agent_name") or agent_username or "").strip()
+    client_message_id = str(body.get("client_message_id") or "").strip()
 
     if not telefono or not mensaje:
         return response(400, {"error": "phone and message are required"})
 
     try:
         result = enviar_whatsapp(telefono, mensaje)
-        logged_item = guardar_mensaje(telefono, mensaje, "salida", "manual", agent_username, agent_name)
+        logged_item = guardar_mensaje(
+            telefono,
+            mensaje,
+            "salida",
+            "manual",
+            agent_username,
+            agent_name,
+            client_message_id,
+        )
         mark_conversation_attended(telefono)
         return response(200, {
             "success": True,
@@ -1730,6 +1742,7 @@ def send_message_from_panel(event):
                 "message": mensaje,
                 "msg_type": "manual",
                 "canal": "whatsapp",
+                "client_message_id": client_message_id,
                 "agent_username": agent_username,
                 "agent_name": agent_name,
             },
