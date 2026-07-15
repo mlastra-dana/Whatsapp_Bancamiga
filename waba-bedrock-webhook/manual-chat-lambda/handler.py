@@ -65,6 +65,10 @@ DEFAULT_ABSENCE_MESSAGE = (
     "Gracias por escribirnos. En este momento no hay un asesor disponible. "
     "Te responderemos apenas retomemos la atencion."
 )
+DEFAULT_BANK_MESSAGE = (
+    "Gracias por escribirnos. Ya recibimos tu mensaje y un asesor te atendera por este canal."
+)
+DEFAULT_ENTRY_MESSAGE = "Hola. Escribe BANCO o LOGISTICA para iniciar una conversacion."
 
 dynamodb = boto3.resource("dynamodb")
 state_table = dynamodb.Table(STATE_TABLE_NAME)
@@ -137,6 +141,14 @@ def normalize_text(value: str) -> str:
     return "".join(
         char for char in unicodedata.normalize("NFD", text)
         if unicodedata.category(char) != "Mn"
+    )
+
+
+def has_bank_intent(text: str) -> bool:
+    normalized = normalize_text(text)
+    return any(
+        keyword in normalized
+        for keyword in ("banco", "banca", "bancamiga", "bank")
     )
 
 
@@ -1366,6 +1378,11 @@ def enviar_whatsapp(telefono, mensaje):
         return json.loads(res.read().decode("utf-8") or "{}")
 
 
+def send_entry_prompt(telefono):
+    enviar_whatsapp(telefono, DEFAULT_ENTRY_MESSAGE)
+    guardar_mensaje(telefono, DEFAULT_ENTRY_MESSAGE, "salida", "entry_prompt")
+
+
 def clean_mime_type(mime_type):
     clean_mime = str(mime_type or "application/octet-stream").split(";", 1)[0].strip().lower()
     if clean_mime in {"audio/m4a", "audio/x-m4a"}:
@@ -2010,9 +2027,11 @@ def handle_whatsapp_webhook(event):
 
     mensaje_lower = normalize_text(mensaje)
 
-    # Bancamiga is manual-only: log incoming messages and do not auto-reply.
-    if "bancamiga" in mensaje_lower:
+    # Bank support is manual-assisted: acknowledge the request and keep the chat for advisors.
+    if has_bank_intent(mensaje_lower):
         save_user(telefono, "bancamiga", [])
+        enviar_whatsapp(telefono, DEFAULT_BANK_MESSAGE)
+        guardar_mensaje(telefono, DEFAULT_BANK_MESSAGE, "salida", "bank_entry")
         return response(200, {"success": True, "mode": "bancamiga"})
 
     # Logistica keeps the existing bot flow.
@@ -2032,13 +2051,15 @@ def handle_whatsapp_webhook(event):
     if estado == "bancamiga":
         if mensaje_lower.strip() == "salir":
             save_user(telefono, "default", [])
-        return response(200, {"success": True, "mode": "bancamiga"})
+        send_entry_prompt(telefono)
+        return response(200, {"success": True, "mode": "entry_prompt"})
 
     if estado == "ia":
         # Legacy safety: old users may still have estado=ia in DynamoDB.
-        # Bancamiga must be manual-only, so we reset the state and do not auto-reply.
-        save_user(telefono, "bancamiga", [])
-        return response(200, {"success": True, "mode": "bancamiga"})
+        # Reset them to the generic entry point so they can choose BANCO or LOGISTICA.
+        save_user(telefono, "default", [])
+        send_entry_prompt(telefono)
+        return response(200, {"success": True, "mode": "entry_prompt"})
 
     if estado == "logistica":
         step = historial.get("step", "menu") if isinstance(historial, dict) else "menu"
@@ -2133,7 +2154,7 @@ def handle_whatsapp_webhook(event):
 
             return response(200, {"success": True})
 
-    enviar_whatsapp(telefono, "Hola. Escribe BANCAMIGA o LOGISTICA para iniciar una conversacion.")
+    send_entry_prompt(telefono)
     return response(200, {"success": True})
 
 
