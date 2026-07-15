@@ -3574,6 +3574,17 @@
             );
         }
 
+        function isNotifiableInboundMessage(message) {
+            if (!message || message.direction !== 'inbound') return false;
+            if (message.msg_type === 'call' || /^\[Llamada\]:/i.test(String(message.message || ''))) {
+                return isAnswerableCall(message);
+            }
+            if (message.msg_type === 'status' || /^\[Estado WhatsApp\]:/i.test(String(message.message || ''))) {
+                return false;
+            }
+            return true;
+        }
+
         function isTerminalCallMessage(message, callId, phone) {
             const messageCallId = message.call_id || extractCallId(message.call_payload || {});
             if (!callId || messageCallId !== callId) return false;
@@ -5116,7 +5127,8 @@
                         selectedNormalizedPhone && normalizePhone(message.phone_number) === selectedNormalizedPhone
                     );
                     const notifiableInbound = sortedNewInbound.filter(message =>
-                        !selectedNormalizedPhone || normalizePhone(message.phone_number) !== selectedNormalizedPhone
+                        (!selectedNormalizedPhone || normalizePhone(message.phone_number) !== selectedNormalizedPhone) &&
+                        isNotifiableInboundMessage(message)
                     );
 
                     if (visibleChatInbound.length) {
