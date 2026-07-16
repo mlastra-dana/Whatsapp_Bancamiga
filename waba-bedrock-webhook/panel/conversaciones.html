@@ -3752,9 +3752,7 @@
                 const detail = formatCallDetail(String(terminalMessage.message || '').replace(/^\[Llamada\]:\s*/i, ''), terminalMessage);
                 cleanupActiveCall();
                 setCallStatus('Llamada finalizada', detail, '', 'live');
-                setTimeout(() => {
-                    if (!activeCall) closeCallModal();
-                }, 900);
+                closeCallModal();
                 return;
             }
 
@@ -3956,6 +3954,8 @@
                         setCallStatus('Llamada activa', `Conectado con ${getContactName(selectedPhone) || selectedPhone}`, 'Audio conectado.', 'live');
                     } else if (['failed', 'disconnected', 'closed'].includes(state)) {
                         setCallStatus('Llamada finalizada', 'La conexión de audio terminó.', state);
+                        cleanupActiveCall();
+                        closeCallModal();
                     }
                 });
                 peerConnection.addEventListener('iceconnectionstatechange', () => {
@@ -4076,6 +4076,8 @@
                         setCallStatus('Llamada activa', `Conectado con ${getContactName(phone) || phone}`, 'Audio conectado.', 'live');
                     } else if (['failed', 'disconnected', 'closed'].includes(state)) {
                         setCallStatus('Llamada finalizada', 'La conexión de audio terminó.', state);
+                        cleanupActiveCall();
+                        closeCallModal();
                     }
                 });
                 peerConnection.addEventListener('iceconnectionstatechange', () => {
@@ -4244,7 +4246,7 @@
                 }
             }
 
-            setCallStatus('Llamada finalizada', 'La llamada fue cerrada desde el panel.', '', 'live');
+            closeCallModal();
         }
 
         function normalize(value) {
