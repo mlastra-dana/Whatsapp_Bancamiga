@@ -1174,6 +1174,37 @@
             justify-content: center;
         }
 
+        .chat-header-icon-btn {
+            width: 42px;
+            height: 42px;
+            min-width: 42px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--violet);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: border-color 0.2s, box-shadow 0.2s, transform 0.2s;
+        }
+
+        .chat-header-icon-btn:hover {
+            border-color: rgba(240, 80, 40, 0.45);
+            box-shadow: 0 8px 20px rgba(15, 15, 31, 0.08);
+            transform: translateY(-1px);
+        }
+
+        .chat-header-icon-btn svg {
+            width: 21px;
+            height: 21px;
+            stroke: currentColor;
+            stroke-width: 2.5;
+            fill: none;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+
         .chat-search {
             display: none;
             align-items: center;
@@ -2670,7 +2701,12 @@
                             <span class="chat-subtitle" id="chat-subtitle"></span>
                         </div>
                         <div class="row-actions">
-                            <button class="secondary-btn" type="button" id="chat-search-toggle" onclick="toggleChatSearch()" title="Buscar en este chat" aria-label="Buscar en este chat">⌕</button>
+                            <button class="chat-header-icon-btn" type="button" id="chat-search-toggle" onclick="toggleChatSearch()" title="Buscar en este chat" aria-label="Buscar en este chat">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <circle cx="11" cy="11" r="7"></circle>
+                                    <path d="m16.5 16.5 4 4"></path>
+                                </svg>
+                            </button>
                             <div class="chat-search" id="chat-search-box">
                                 <input class="chat-search-input" id="chat-search-input" type="search" placeholder="Buscar en chat" aria-label="Buscar en este chat">
                                 <span class="chat-search-count" id="chat-search-count">0/0</span>
@@ -2678,7 +2714,11 @@
                                 <button class="chat-search-btn" type="button" id="chat-search-next" onclick="goToChatSearchMatch(1)" aria-label="Resultado siguiente">↓</button>
                                 <button class="chat-search-btn" type="button" onclick="clearChatSearch()" aria-label="Cerrar búsqueda">×</button>
                             </div>
-                            <button class="secondary-btn call-btn" type="button" onclick="startWhatsAppCall()">Llamar</button>
+                            <button class="chat-header-icon-btn call-btn" type="button" onclick="startWhatsAppCall()" title="Llamar" aria-label="Llamar">
+                                <svg viewBox="0 0 24 24" aria-hidden="true">
+                                    <path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8.1 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.5c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2.1Z"></path>
+                                </svg>
+                            </button>
                             <button class="secondary-btn" id="edit-contact-btn" onclick="openContactModal()" style="display:none;">Guardar contacto</button>
                         </div>
                     </div>
