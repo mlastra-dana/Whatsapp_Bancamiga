@@ -1064,6 +1064,31 @@
         .contact-item .phone { font-weight: 650; font-size: 14px; color: var(--text); }
         .contact-item .meta { font-size: 12px; color: var(--muted); margin-top: 3px; }
         .contact-item .last-msg { font-size: 12px; color: var(--muted); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .contacts-section-title {
+            padding: 12px 15px 7px;
+            font-size: 11px;
+            font-weight: 850;
+            letter-spacing: 0.05em;
+            text-transform: uppercase;
+            color: var(--muted);
+            background: var(--surface-muted);
+            border-bottom: 1px solid var(--border);
+        }
+        .contact-item.message-search-result .phone {
+            font-size: 13px;
+        }
+        .contact-item.message-search-result .last-msg {
+            white-space: normal;
+            display: -webkit-box;
+            -webkit-line-clamp: 2;
+            -webkit-box-orient: vertical;
+        }
+        .contact-item mark {
+            background: transparent;
+            color: var(--orange);
+            font-weight: 850;
+            padding: 0;
+        }
         .contact-row {
             display: flex;
             align-items: center;
@@ -1552,8 +1577,9 @@
         .message.outbound .direction { color: var(--violet); }
 
         .message.search-active {
-            outline: 3px solid rgba(240, 80, 40, 0.24);
+            outline: 3px solid rgba(240, 80, 40, 0.5);
             outline-offset: 2px;
+            box-shadow: 0 0 0 6px rgba(240, 80, 40, 0.12), 0 14px 30px rgba(15, 15, 31, 0.16);
         }
 
         .message-content {
@@ -4914,15 +4940,32 @@
             return Object.values(contacts).filter(contact => getUnreadCount(contact) > 0).length;
         }
 
-        function contactMatchesCurrentSearch(contact) {
+        function contactMatchesIdentitySearch(contact) {
             const query = normalize(searchTerm);
             if (!query) return true;
             const haystack = normalize([
                 contact.phone,
                 getContactName(contact.phone),
-                contact.lastMessage,
             ].join(' '));
             return haystack.includes(query);
+        }
+
+        function messageMatchesCurrentSearch(message) {
+            const query = normalize(searchTerm);
+            if (!query) return false;
+            return normalize(getMessageSearchText(message)).includes(query);
+        }
+
+        function contactHasMessageSearchMatch(contact) {
+            const query = normalize(searchTerm);
+            if (!query || !contact || !Array.isArray(contact.messages)) return false;
+            return contact.messages.some(messageMatchesCurrentSearch);
+        }
+
+        function contactMatchesCurrentSearch(contact) {
+            const query = normalize(searchTerm);
+            if (!query) return true;
+            return contactMatchesIdentitySearch(contact) || contactHasMessageSearchMatch(contact);
         }
 
         function getVisibleContacts() {
@@ -5401,6 +5444,106 @@
             syncSavedContactsIntoConversations();
         }
 
+        function renderGlobalSearchHighlightedText(text) {
+            const cleanText = String(text || '');
+            const term = String(searchTerm || '').trim();
+            if (!term) return escapeHtml(cleanText);
+            const pattern = new RegExp(`(${escapeRegExp(term)})`, 'gi');
+            return escapeHtml(cleanText).replace(pattern, '<mark>$1</mark>');
+        }
+
+        function getMessageSearchSnippet(message) {
+            const text = getMessageSearchText(message).replace(/\s+/g, ' ').trim();
+            const query = normalize(searchTerm);
+            if (!text || !query) return text;
+            const normalizedText = normalize(text);
+            const index = normalizedText.indexOf(query);
+            if (index < 0) return text.substring(0, 120);
+            const start = Math.max(0, index - 42);
+            const end = Math.min(text.length, index + searchTerm.length + 82);
+            const prefix = start > 0 ? '...' : '';
+            const suffix = end < text.length ? '...' : '';
+            return `${prefix}${text.substring(start, end)}${suffix}`;
+        }
+
+        function getMessageSearchResults(visibleContacts) {
+            const query = normalize(searchTerm);
+            if (!query) return [];
+            const results = [];
+            visibleContacts.forEach(contact => {
+                contact.messages
+                    .filter(messageMatchesCurrentSearch)
+                    .forEach(message => results.push({ contact, message }));
+            });
+            return results
+                .sort((a, b) => (b.message.timestamp || '').localeCompare(a.message.timestamp || ''))
+                .slice(0, 30);
+        }
+
+        function renderContactListItem(contact) {
+            const timeStr = contact.lastTime ? new Date(contact.lastTime).toLocaleString('es', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            }) : '';
+            const contactName = getContactName(contact.phone);
+            const activeClass = contact.phone === selectedPhone ? ' active' : '';
+            const unreadCount = getUnreadCount(contact);
+            const unreadClass = unreadCount > 0 ? ' unread' : '';
+            const contactAgent = getContactAgent(contact);
+            const agentClass = contactAgent ? ' has-agent' : '';
+            const agentStyle = contactAgent ? ` style="--agent-color:${escapeHtml(contactAgent.color)}"` : '';
+            const meta = contact.messageCount
+                ? `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}`
+                : `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}Contacto guardado`;
+            const preview = contact.lastMessage
+                ? `<div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>`
+                : '';
+            const indicators = [
+                contactAgent ? renderAgentChip(contactAgent, 'small') : '',
+                unreadCount > 0 ? `<span class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>` : '',
+            ].filter(Boolean).join('');
+            return `<button class="contact-item${activeClass}${unreadClass}${agentClass}"${agentStyle} data-phone="${escapeHtml(contact.phone)}">
+                <div class="contact-row">
+                    <div class="phone">${contactName ? '👤 ' + renderGlobalSearchHighlightedText(contactName) : '📱 ' + renderGlobalSearchHighlightedText(contact.phone)}</div>
+                    ${indicators ? `<div class="contact-indicators">${indicators}</div>` : ''}
+                </div>
+                <div class="meta">${meta}</div>
+                ${preview}
+            </button>`;
+        }
+
+        function renderMessageSearchResult(result) {
+            const { contact, message } = result;
+            const contactName = getContactName(contact.phone) || contact.phone;
+            const timeStr = message.timestamp ? new Date(message.timestamp).toLocaleString('es', {
+                month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+            }) : '';
+            const snippet = getMessageSearchSnippet(message);
+            return `<button class="contact-item message-search-result" data-phone="${escapeHtml(contact.phone)}" data-message-id="${escapeHtml(messageId(message))}">
+                <div class="contact-row">
+                    <div class="phone">${renderGlobalSearchHighlightedText(contactName)}</div>
+                </div>
+                <div class="meta">${escapeHtml(contact.phone)} · ${escapeHtml(timeStr)}</div>
+                <div class="last-msg">${renderGlobalSearchHighlightedText(snippet)}</div>
+            </button>`;
+        }
+
+        function openMessageSearchResult(phone, messageKey) {
+            selectContact(phone);
+            const input = document.getElementById('chat-search-input');
+            toggleChatSearch(true);
+            if (input) input.value = searchTerm;
+            chatSearchTerm = searchTerm;
+            const contact = contacts[phone];
+            if (contact) {
+                updateChatSearchMatches(contact);
+                const targetIndex = chatSearchMatches.findIndex(match => messageId(match.message) === messageKey);
+                if (targetIndex >= 0) chatSearchIndex = targetIndex;
+                selectedContactRenderKey = '';
+                renderSelectedContact({ forceRender: true });
+                requestAnimationFrame(scrollToChatSearchMatch);
+            }
+        }
+
         function renderContacts() {
             const list = document.getElementById('contacts-list');
             const query = normalize(searchTerm);
@@ -5411,39 +5554,28 @@
                 return;
             }
 
-            list.innerHTML = sorted.map(contact => {
-                const timeStr = contact.lastTime ? new Date(contact.lastTime).toLocaleString('es', {
-                    month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
-                }) : '';
-                const contactName = getContactName(contact.phone);
-                const activeClass = contact.phone === selectedPhone ? ' active' : '';
-                const unreadCount = getUnreadCount(contact);
-                const unreadClass = unreadCount > 0 ? ' unread' : '';
-                const contactAgent = getContactAgent(contact);
-                const agentClass = contactAgent ? ' has-agent' : '';
-                const agentStyle = contactAgent ? ` style="--agent-color:${escapeHtml(contactAgent.color)}"` : '';
-                const meta = contact.messageCount
-                    ? `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}`
-                    : `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}Contacto guardado`;
-                const preview = contact.lastMessage
-                    ? `<div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>`
-                    : '';
-                const indicators = [
-                    contactAgent ? renderAgentChip(contactAgent, 'small') : '',
-                    unreadCount > 0 ? `<span class="unread-badge">${unreadCount > 99 ? '99+' : unreadCount}</span>` : '',
-                ].filter(Boolean).join('');
-                return `<button class="contact-item${activeClass}${unreadClass}${agentClass}"${agentStyle} data-phone="${escapeHtml(contact.phone)}">
-                    <div class="contact-row">
-                        <div class="phone">${contactName ? '👤 ' + escapeHtml(contactName) : '📱 ' + escapeHtml(contact.phone)}</div>
-                        ${indicators ? `<div class="contact-indicators">${indicators}</div>` : ''}
-                    </div>
-                    <div class="meta">${meta}</div>
-                    ${preview}
-                </button>`;
-            }).join('');
+            if (query) {
+                const contactResults = sorted.filter(contactMatchesIdentitySearch);
+                const messageResults = getMessageSearchResults(sorted);
+                const sections = [];
+                if (contactResults.length) {
+                    sections.push('<div class="contacts-section-title">Chats</div>');
+                    sections.push(contactResults.map(renderContactListItem).join(''));
+                }
+                if (messageResults.length) {
+                    sections.push('<div class="contacts-section-title">Mensajes</div>');
+                    sections.push(messageResults.map(renderMessageSearchResult).join(''));
+                }
+                list.innerHTML = sections.join('') || '<div class="empty-state">No hay resultados para la búsqueda</div>';
+            } else {
+                list.innerHTML = sorted.map(renderContactListItem).join('');
+            }
 
-            list.querySelectorAll('.contact-item').forEach(item => {
+            list.querySelectorAll('.contact-item:not(.message-search-result)').forEach(item => {
                 item.addEventListener('click', () => selectContact(item.dataset.phone));
+            });
+            list.querySelectorAll('.message-search-result').forEach(item => {
+                item.addEventListener('click', () => openMessageSearchResult(item.dataset.phone, item.dataset.messageId));
             });
 
             updateUnreadTitle();
@@ -5628,9 +5760,17 @@
         function scrollToChatSearchMatch() {
             if (chatSearchIndex < 0) return;
             const target = document.querySelector(`.message[data-search-index="${chatSearchIndex}"]`);
-            if (target) {
-                target.scrollIntoView({ block: 'center', behavior: 'smooth' });
-            }
+            const messagesDiv = document.getElementById('chat-messages');
+            if (!target || !messagesDiv) return;
+
+            const containerRect = messagesDiv.getBoundingClientRect();
+            const targetRect = target.getBoundingClientRect();
+            const targetTop = messagesDiv.scrollTop + targetRect.top - containerRect.top;
+            const targetCenter = targetTop - (messagesDiv.clientHeight / 2) + (targetRect.height / 2);
+            messagesDiv.scrollTo({
+                top: Math.max(0, targetCenter),
+                behavior: 'smooth',
+            });
         }
 
         function applyChatSearch() {
@@ -5700,6 +5840,9 @@
         function renderMessageContent(message) {
             const text = formatTemplatePlaceholders(message.message).trim();
             const templateActions = renderTemplateButtons(message);
+            const renderBodyText = value => chatSearchTerm
+                ? renderSearchHighlightedText(value)
+                : escapeHtml(value);
             const mediaRefPattern = '(https?:\\/\\/\\S+|meta-media:[A-Za-z0-9_-]+)';
             const imageMatch = text.match(new RegExp(`^\\[Imagen\\]:\\s*${mediaRefPattern}`, 'i'));
             const audioMatch = text.match(new RegExp(`^\\[Audio\\]:\\s*${mediaRefPattern}`, 'i'));
@@ -5719,7 +5862,7 @@
                     : detail.replace(/^mensaje no entregado:?\s*/i, '') || 'Meta no pudo entregar este mensaje.';
                 return `<div class="delivery-status-card">
                     <strong>No entregado</strong>
-                    <span>${escapeHtml(readableDetail)}</span>
+                    <span>${renderBodyText(readableDetail)}</span>
                 </div>`;
             }
 
@@ -5733,7 +5876,7 @@
                         <span class="media-error">Imagen expirada</span>
                         <img class="message-image" src="${escapeHtml(imageUrl)}" alt="Imagen del mensaje" loading="lazy" onload="this.previousElementSibling.previousElementSibling.style.display='none'" onerror="this.style.display='none';this.previousElementSibling.style.display='flex';this.previousElementSibling.previousElementSibling.style.display='none'">
                     </a>
-                    ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
+                    ${remainingText ? `<div class="media-body">${renderBodyText(remainingText)}</div>` : ''}
                     ${templateActions}
                 </div>`;
             }
@@ -5744,7 +5887,7 @@
                 const remainingText = text.slice(videoMatch[0].length).trim();
                 return `<div class="media-card">
                     <video class="message-video" controls preload="metadata" src="${escapeHtml(videoUrl)}" onerror="this.insertAdjacentHTML('afterend', '<div class=&quot;media-unavailable&quot; style=&quot;display:block&quot;>Video expirado</div>'); this.style.display='none';"></video>
-                    ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
+                    ${remainingText ? `<div class="media-body">${renderBodyText(remainingText)}</div>` : ''}
                     ${templateActions}
                 </div>`;
             }
@@ -5796,7 +5939,7 @@
                             <div class="media-unavailable">Documento expirado</div>
                         </div>
                     </a>
-                    ${remainingText ? `<div class="media-body">${escapeHtml(remainingText)}</div>` : ''}
+                    ${remainingText ? `<div class="media-body">${renderBodyText(remainingText)}</div>` : ''}
                 </div>`;
             }
 
@@ -5957,6 +6100,11 @@
                 const agentStyle = messageAgent ? ` style="--agent-color:${escapeHtml(messageAgent.color)}"` : '';
                 return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
+
+            if (chatSearchTerm) {
+                selectedContactRenderKey = renderKey;
+                return;
+            }
 
             setChatScrollPosition(messagesDiv, {
                 stickToBottom: shouldStayAtBottom,
