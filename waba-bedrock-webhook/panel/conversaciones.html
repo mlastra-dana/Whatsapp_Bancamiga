@@ -1174,6 +1174,65 @@
             justify-content: center;
         }
 
+        .chat-search {
+            display: none;
+            align-items: center;
+            gap: 6px;
+            min-width: 230px;
+            max-width: 360px;
+        }
+
+        .chat-search.open {
+            display: inline-flex;
+        }
+
+        .chat-search-input {
+            width: 180px;
+            height: 30px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+            padding: 0 10px;
+            color: var(--text);
+            background: var(--surface);
+            font: inherit;
+            font-size: 12px;
+            outline: none;
+        }
+
+        .chat-search-input:focus {
+            border-color: var(--lilac);
+            box-shadow: 0 0 0 3px rgba(167, 121, 255, 0.18);
+        }
+
+        .chat-search-count {
+            min-width: 44px;
+            color: var(--muted);
+            font-size: 11px;
+            font-weight: 700;
+            text-align: center;
+        }
+
+        .chat-search-btn {
+            width: 30px;
+            height: 30px;
+            min-width: 30px;
+            border-radius: 999px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--violet);
+            font-size: 14px;
+            font-weight: 800;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .chat-search-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
         .chat-messages {
             flex: 1;
             min-height: 0;
@@ -1461,8 +1520,21 @@
 
         .message.outbound .direction { color: var(--violet); }
 
+        .message.search-active {
+            outline: 3px solid rgba(240, 80, 40, 0.24);
+            outline-offset: 2px;
+        }
+
         .message-content {
             white-space: pre-wrap;
+        }
+
+        .search-hit {
+            background: rgba(255, 217, 102, 0.9);
+            color: var(--navy);
+            border-radius: 3px;
+            padding: 0 2px;
+            font-weight: 850;
         }
 
         .message-content.rich-message {
@@ -2349,6 +2421,9 @@
             .layout { flex-direction: column; height: auto; overflow: visible; }
             .contacts-panel { width: 100%; max-height: 220px; }
             .chat-panel { min-height: 520px; }
+            .chat-header { align-items: flex-start; flex-direction: column; }
+            .chat-search { width: 100%; max-width: none; min-width: 0; }
+            .chat-search-input { width: 100%; min-width: 0; }
             .message { max-width: 90%; }
         }
     </style>
@@ -2595,6 +2670,14 @@
                             <span class="chat-subtitle" id="chat-subtitle"></span>
                         </div>
                         <div class="row-actions">
+                            <button class="secondary-btn" type="button" id="chat-search-toggle" onclick="toggleChatSearch()" title="Buscar en este chat" aria-label="Buscar en este chat">⌕</button>
+                            <div class="chat-search" id="chat-search-box">
+                                <input class="chat-search-input" id="chat-search-input" type="search" placeholder="Buscar en chat" aria-label="Buscar en este chat">
+                                <span class="chat-search-count" id="chat-search-count">0/0</span>
+                                <button class="chat-search-btn" type="button" id="chat-search-prev" onclick="goToChatSearchMatch(-1)" aria-label="Resultado anterior">↑</button>
+                                <button class="chat-search-btn" type="button" id="chat-search-next" onclick="goToChatSearchMatch(1)" aria-label="Resultado siguiente">↓</button>
+                                <button class="chat-search-btn" type="button" onclick="clearChatSearch()" aria-label="Cerrar búsqueda">×</button>
+                            </div>
                             <button class="secondary-btn call-btn" type="button" onclick="startWhatsAppCall()">Llamar</button>
                             <button class="secondary-btn" id="edit-contact-btn" onclick="openContactModal()" style="display:none;">Guardar contacto</button>
                         </div>
@@ -2837,6 +2920,9 @@
         let savedContacts = [];
         let selectedPhone = null;
         let searchTerm = '';
+        let chatSearchTerm = '';
+        let chatSearchMatches = [];
+        let chatSearchIndex = -1;
         let dateFrom = '';
         let dateTo = '';
         let previousMessageCount = 0;
@@ -4814,6 +4900,7 @@
         function clearSelectedChatView(message = '') {
             selectedPhone = null;
             selectedContactRenderKey = '';
+            clearChatSearch({ skipRender: true });
             document.getElementById('chat-header-bar').style.display = 'none';
             document.getElementById('composer-panel').style.display = 'none';
             document.getElementById('template-strip').style.display = 'none';
@@ -5323,6 +5410,7 @@
 
         function selectContact(phone, options = {}) {
             const shouldMarkRead = options.markRead !== false;
+            if (phone !== selectedPhone) clearChatSearch({ skipRender: true });
             selectedPhone = phone;
             selectedContactRenderKey = '';
             if (shouldMarkRead) markContactRead(phone);
@@ -5334,6 +5422,7 @@
             const latest = Object.values(contacts)
                 .sort((a, b) => b.lastTime.localeCompare(a.lastTime))[0];
             if (!latest) return;
+            if (latest.phone !== selectedPhone) clearChatSearch({ skipRender: true });
             selectedPhone = latest.phone;
             selectedContactRenderKey = '';
             renderContacts();
@@ -5429,6 +5518,122 @@
 
         function renderTextWithLineBreaks(text) {
             return escapeHtml(text).replace(/\n/g, '<br>');
+        }
+
+        function escapeRegExp(value) {
+            return String(value || '').replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        }
+
+        function renderSearchHighlightedText(text) {
+            const cleanText = String(text || '');
+            const term = String(chatSearchTerm || '').trim();
+            if (!term) return renderTextWithLineBreaks(cleanText);
+            const pattern = new RegExp(`(${escapeRegExp(term)})`, 'gi');
+            return escapeHtml(cleanText)
+                .replace(pattern, '<mark class="search-hit">$1</mark>')
+                .replace(/\n/g, '<br>');
+        }
+
+        function getMessageSearchText(message) {
+            const text = formatTemplatePlaceholders(message?.message || '');
+            const templateButtons = Array.isArray(message?.template_buttons)
+                ? message.template_buttons.map(button => `${button.text || ''} ${button.value || ''} ${button.url || ''}`).join(' ')
+                : '';
+            return `${text} ${templateButtons}`.trim();
+        }
+
+        function updateChatSearchMatches(contact) {
+            const term = normalize(chatSearchTerm);
+            chatSearchMatches = [];
+            if (!contact || !term) {
+                chatSearchIndex = -1;
+                updateChatSearchUi();
+                return;
+            }
+
+            chatSearchMatches = contact.messages
+                .map((message, index) => ({ message, index }))
+                .filter(item => normalize(getMessageSearchText(item.message)).includes(term));
+
+            if (!chatSearchMatches.length) {
+                chatSearchIndex = -1;
+            } else if (chatSearchIndex < 0 || chatSearchIndex >= chatSearchMatches.length) {
+                chatSearchIndex = 0;
+            }
+            updateChatSearchUi();
+        }
+
+        function getChatSearchMatchIndex(message) {
+            if (!chatSearchTerm || !chatSearchMatches.length) return -1;
+            const key = messageId(message);
+            return chatSearchMatches.findIndex(match => messageId(match.message) === key);
+        }
+
+        function updateChatSearchUi() {
+            const count = document.getElementById('chat-search-count');
+            const prev = document.getElementById('chat-search-prev');
+            const next = document.getElementById('chat-search-next');
+            if (count) {
+                count.textContent = chatSearchMatches.length
+                    ? `${chatSearchIndex + 1}/${chatSearchMatches.length}`
+                    : '0/0';
+            }
+            [prev, next].forEach(button => {
+                if (button) button.disabled = chatSearchMatches.length === 0;
+            });
+        }
+
+        function scrollToChatSearchMatch() {
+            if (chatSearchIndex < 0) return;
+            const target = document.querySelector(`.message[data-search-index="${chatSearchIndex}"]`);
+            if (target) {
+                target.scrollIntoView({ block: 'center', behavior: 'smooth' });
+            }
+        }
+
+        function applyChatSearch() {
+            chatSearchTerm = document.getElementById('chat-search-input')?.value.trim() || '';
+            chatSearchIndex = chatSearchTerm ? 0 : -1;
+            selectedContactRenderKey = '';
+            if (selectedPhone && contacts[selectedPhone]) {
+                renderSelectedContact({ forceRender: true });
+                requestAnimationFrame(scrollToChatSearchMatch);
+            }
+        }
+
+        function toggleChatSearch(forceOpen = null) {
+            const box = document.getElementById('chat-search-box');
+            const input = document.getElementById('chat-search-input');
+            if (!box || !input) return;
+            const shouldOpen = forceOpen === null ? !box.classList.contains('open') : Boolean(forceOpen);
+            box.classList.toggle('open', shouldOpen);
+            if (shouldOpen) {
+                setTimeout(() => input.focus(), 0);
+            } else {
+                clearChatSearch();
+            }
+        }
+
+        function clearChatSearch(options = {}) {
+            chatSearchTerm = '';
+            chatSearchMatches = [];
+            chatSearchIndex = -1;
+            const input = document.getElementById('chat-search-input');
+            const box = document.getElementById('chat-search-box');
+            if (input) input.value = '';
+            if (box && !options.keepOpen) box.classList.remove('open');
+            updateChatSearchUi();
+            selectedContactRenderKey = '';
+            if (!options.skipRender && selectedPhone && contacts[selectedPhone]) renderSelectedContact({ forceRender: true });
+        }
+
+        function goToChatSearchMatch(delta) {
+            if (!chatSearchMatches.length) return;
+            chatSearchIndex = (chatSearchIndex + delta + chatSearchMatches.length) % chatSearchMatches.length;
+            updateChatSearchUi();
+            selectedContactRenderKey = '';
+            renderSelectedContact({ forceRender: true });
+            requestAnimationFrame(scrollToChatSearchMatch);
         }
 
         function renderTemplateButtons(message) {
@@ -5598,7 +5803,7 @@
                 </div>`;
             }
 
-            return `${renderTextWithLineBreaks(text)}${templateActions}`;
+            return `${renderSearchHighlightedText(text)}${templateActions}`;
         }
 
         function isRichMessageContent(message) {
@@ -5660,6 +5865,8 @@
                 selectedPhone,
                 contactName || '',
                 contact.messageCount,
+                chatSearchTerm,
+                chatSearchIndex,
                 ...contact.messages.map(messageId),
             ].join('||');
             if (!options.forceRender && selectedContactRenderKey === renderKey) {
@@ -5669,6 +5876,7 @@
             const shouldStayAtBottom = options.forceScrollBottom || distanceFromBottom <= 120;
             const previousScrollHeight = messagesDiv.scrollHeight;
             const previousScrollTop = messagesDiv.scrollTop;
+            updateChatSearchMatches(contact);
 
             messagesDiv.innerHTML = contact.messages.map(message => {
                 const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString('es', {
@@ -5701,8 +5909,11 @@
                                 : /^\[Contacto\]:/i.test(formattedMessage)
                                 ? ' contact-message'
                                     : '';
+                const matchIndex = getChatSearchMatchIndex(message);
+                const searchClass = matchIndex === chatSearchIndex && matchIndex >= 0 ? ' search-active' : '';
+                const searchAttr = matchIndex >= 0 ? ` data-search-index="${matchIndex}"` : '';
                 const agentStyle = messageAgent ? ` style="--agent-color:${escapeHtml(messageAgent.color)}"` : '';
-                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}"${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
+                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
             setChatScrollPosition(messagesDiv, {
@@ -6188,6 +6399,18 @@
         });
         document.getElementById('search-input').addEventListener('input', applySearch);
         document.getElementById('search-input').addEventListener('search', applySearch);
+        document.getElementById('chat-search-input').addEventListener('input', applyChatSearch);
+        document.getElementById('chat-search-input').addEventListener('search', applyChatSearch);
+        document.getElementById('chat-search-input').addEventListener('keydown', event => {
+            if (event.key === 'Enter') {
+                event.preventDefault();
+                goToChatSearchMatch(event.shiftKey ? -1 : 1);
+            }
+            if (event.key === 'Escape') {
+                event.preventDefault();
+                clearChatSearch();
+            }
+        });
         document.getElementById('date-from').addEventListener('change', applyDateFilters);
         document.getElementById('date-to').addEventListener('change', applyDateFilters);
         document.addEventListener('visibilitychange', () => {
