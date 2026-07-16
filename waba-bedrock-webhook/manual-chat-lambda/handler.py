@@ -68,7 +68,12 @@ DEFAULT_ABSENCE_MESSAGE = (
 DEFAULT_BANK_MESSAGE = (
     "Gracias por escribirnos. Ya recibimos tu mensaje y un asesor te atendera por este canal."
 )
-DEFAULT_ENTRY_MESSAGE = "Hola. Escribe BANCO o LOGISTICA para iniciar una conversacion."
+DEFAULT_ENTRY_MESSAGE = (
+    "Hola 👋\n\n"
+    "Para continuar, escribe una de estas opciones:\n\n"
+    "🏦 BANCO: Demo WABA CENTER\n"
+    "🚚 LOGISTICA: Demo de seguimiento o actualización de despachos."
+)
 
 dynamodb = boto3.resource("dynamodb")
 state_table = dynamodb.Table(STATE_TABLE_NAME)
@@ -1380,7 +1385,6 @@ def enviar_whatsapp(telefono, mensaje):
 
 def send_entry_prompt(telefono):
     enviar_whatsapp(telefono, DEFAULT_ENTRY_MESSAGE)
-    guardar_mensaje(telefono, DEFAULT_ENTRY_MESSAGE, "salida", "entry_prompt")
 
 
 def clean_mime_type(mime_type):
