@@ -5604,6 +5604,10 @@
             return message.msg_type === 'template' || /^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto|Estado WhatsApp)\]:/i.test(text);
         }
 
+        function isAutomaticOutboundMessage(message) {
+            return ['absence', 'entry_prompt', 'bank_entry'].includes(String(message?.msg_type || ''));
+        }
+
         function setChatScrollPosition(messagesDiv, options) {
             if (!messagesDiv) return;
             if (chatScrollFrame) cancelAnimationFrame(chatScrollFrame);
@@ -5672,13 +5676,16 @@
                     month: 'short', day: 'numeric'
                 }) : '';
                 const advisorLabel = message.agent_name || message.agent_username || 'Asesor';
-                const messageAgent = getMessageAgent(message);
+                const isAutomatic = isAutomaticOutboundMessage(message);
+                const messageAgent = isAutomatic ? null : getMessageAgent(message);
                 const direction = message.direction === 'inbound'
                     ? '👤 Cliente'
                     : message.msg_type === 'template'
                         ? '✍️ Plantilla DANA'
                     : message.msg_type === 'absence'
                         ? '🤖 Bot'
+                    : isAutomatic
+                        ? '🤖 Automático'
                         : `✍️ ${advisorLabel}`;
                 const contentClass = isRichMessageContent(message)
                     ? 'message-content rich-message'
