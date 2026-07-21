@@ -622,7 +622,17 @@ def update_absence_bot(event):
     return response(200, save_absence_bot_config(enabled, message))
 
 
-def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_username="", agent_name="", client_message_id=""):
+def guardar_mensaje(
+    telefono,
+    mensaje,
+    direccion,
+    msg_type="text",
+    agent_username="",
+    agent_name="",
+    client_message_id="",
+    whatsapp_message_id="",
+    reaction_message_id="",
+):
     if conversations_table is None:
         logger.warning("CONVERSATIONS_TABLE_NAME is not configured; message was not logged")
         return None
@@ -642,6 +652,10 @@ def guardar_mensaje(telefono, mensaje, direccion, msg_type="text", agent_usernam
         item["agent_name"] = str(agent_name)[:160]
     if client_message_id:
         item["client_message_id"] = str(client_message_id)[:120]
+    if whatsapp_message_id:
+        item["whatsapp_message_id"] = str(whatsapp_message_id)[:240]
+    if reaction_message_id:
+        item["reaction_message_id"] = str(reaction_message_id)[:240]
     conversations_table.put_item(Item=item)
     return item
 
@@ -1351,6 +1365,8 @@ def normalizar_log_para_panel(item):
         "canal": item.get("canal", "whatsapp"),
         "provider": item.get("provider") or "",
         "client_message_id": item.get("client_message_id") or "",
+        "whatsapp_message_id": item.get("whatsapp_message_id") or "",
+        "reaction_message_id": item.get("reaction_message_id") or "",
         "agent_username": item.get("agent_username") or "",
         "agent_name": item.get("agent_name") or "",
         "call_id": item.get("call_id") or "",
@@ -1606,10 +1622,8 @@ def extraer_mensaje(msg):
     if msg_type == "reaction":
         reaction = msg.get("reaction") if isinstance(msg.get("reaction"), dict) else {}
         emoji = str(reaction.get("emoji") or "").strip()
-        reacted_message_id = str(reaction.get("message_id") or "").strip()
         if emoji:
-            detail = f" | {reacted_message_id}" if reacted_message_id else ""
-            return f"[Reaccion]: {emoji}{detail}", "reaction"
+            return f"[Reaccion]: {emoji}", "reaction"
         return "[Reaccion eliminada]", "reaction"
 
     if msg_type == "image":
@@ -1752,6 +1766,10 @@ def send_message_from_panel(event):
 
     try:
         result = enviar_whatsapp(telefono, mensaje)
+        sent_messages = result.get("messages") if isinstance(result, dict) else []
+        whatsapp_message_id = ""
+        if isinstance(sent_messages, list) and sent_messages:
+            whatsapp_message_id = str(sent_messages[0].get("id") or "").strip()
         logged_item = guardar_mensaje(
             telefono,
             mensaje,
@@ -1760,6 +1778,7 @@ def send_message_from_panel(event):
             agent_username,
             agent_name,
             client_message_id,
+            whatsapp_message_id,
         )
         mark_conversation_attended(telefono)
         return response(200, {
@@ -1773,6 +1792,7 @@ def send_message_from_panel(event):
                 "msg_type": "manual",
                 "canal": "whatsapp",
                 "client_message_id": client_message_id,
+                "whatsapp_message_id": whatsapp_message_id,
                 "agent_username": agent_username,
                 "agent_name": agent_name,
             },
@@ -1883,7 +1903,17 @@ def send_media_from_panel(event):
             })
         media_url = f"meta-media:{media_id}"
         log_message = format_outbound_media_log(media_type, media_url, filename, mime_type, caption)
-        guardar_mensaje(telefono, log_message, "salida", media_type, agent_username, agent_name)
+        whatsapp_message_id = str(sent_messages[0].get("id") or "").strip()
+        guardar_mensaje(
+            telefono,
+            log_message,
+            "salida",
+            media_type,
+            agent_username,
+            agent_name,
+            "",
+            whatsapp_message_id,
+        )
         mark_conversation_attended(telefono)
         return response(200, {
             "success": True,
@@ -2021,7 +2051,17 @@ def handle_whatsapp_webhook(event):
         msg = messages[0]
         telefono = msg["from"]
         mensaje, msg_type = extraer_mensaje(msg)
-        guardar_mensaje(telefono, mensaje, "entrada", msg_type)
+        whatsapp_message_id = str(msg.get("id") or "").strip()
+        reaction = msg.get("reaction") if isinstance(msg.get("reaction"), dict) else {}
+        reaction_message_id = str(reaction.get("message_id") or "").strip() if msg_type == "reaction" else ""
+        guardar_mensaje(
+            telefono,
+            mensaje,
+            "entrada",
+            msg_type,
+            whatsapp_message_id=whatsapp_message_id,
+            reaction_message_id=reaction_message_id,
+        )
         if msg_type in {"call", "reaction"}:
             return response(200, {"success": True, "mode": msg_type})
 

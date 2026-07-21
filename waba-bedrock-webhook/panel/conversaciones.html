@@ -1617,6 +1617,21 @@
             line-height: 1;
         }
 
+        .reaction-card .reaction-copy {
+            display: grid;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .reaction-card .reaction-reference {
+            max-width: min(360px, 58vw);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            color: var(--text);
+            font-weight: 850;
+        }
+
         .template-action-list {
             display: grid;
             gap: 6px;
@@ -5046,6 +5061,8 @@
         }
 
         function messageId(message) {
+            const whatsappMessageId = String(message?.whatsapp_message_id || '').trim();
+            if (whatsappMessageId) return `wa:${whatsappMessageId}`;
             const clientMessageId = String(message?.client_message_id || '').trim();
             if (clientMessageId) return `client:${clientMessageId}`;
             return [
@@ -5856,7 +5873,39 @@
             return `<div class="template-action-list">${buttons.join('')}</div>`;
         }
 
-        function renderMessageContent(message) {
+        function extractReactionTargetId(message) {
+            const explicitId = String(message?.reaction_message_id || '').trim();
+            if (explicitId) return explicitId;
+
+            const text = String(message?.message || '');
+            const legacyMatch = text.match(/wamid\.[A-Za-z0-9._=-]+/);
+            return legacyMatch ? legacyMatch[0] : '';
+        }
+
+        function messageReactionPreview(message) {
+            const text = formatTemplatePlaceholders(message?.message || '').trim();
+            if (!text) return 'mensaje';
+            const labelMatch = text.match(/^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto|Estado WhatsApp)\]/i);
+            if (labelMatch) return labelMatch[1];
+            return text.replace(/\s+/g, ' ').slice(0, 120);
+        }
+
+        function renderReactionReference(message, messageLookup) {
+            const targetId = extractReactionTargetId(message);
+            if (!targetId || !messageLookup) return '';
+
+            const referenced = messageLookup.get(targetId);
+            if (!referenced) return '';
+
+            const author = referenced.direction === 'inbound'
+                ? 'cliente'
+                : referenced.msg_type === 'template'
+                    ? 'plantilla'
+                    : 'asesor';
+            return `<span class="reaction-reference">a ${escapeHtml(author)}: ${escapeHtml(messageReactionPreview(referenced))}</span>`;
+        }
+
+        function renderMessageContent(message, messageLookup = null) {
             const text = formatTemplatePlaceholders(message.message).trim();
             const templateActions = renderTemplateButtons(message);
             const renderBodyText = value => chatSearchTerm
@@ -5872,7 +5921,7 @@
             const callMatch = text.match(/^\[Llamada\]:\s*(.*)$/i);
             const contactMatch = text.match(/^\[Contacto\]:\s*([\s\S]*)$/i);
             const statusMatch = text.match(/^\[Estado WhatsApp\]:\s*(.*)$/i);
-            const reactionMatch = text.match(/^\[Reaccion\]:\s*([^|]+)(?:\|.*)?$/i);
+            const reactionMatch = text.match(/^\[Reaccion\]:\s*([^\s|]+)(?:[\s\S]*)?$/i);
             const reactionRemovedMatch = text.match(/^\[Reaccion eliminada\]$/i);
 
             if (statusMatch) {
@@ -5890,9 +5939,13 @@
             if (reactionMatch || reactionRemovedMatch) {
                 const emoji = reactionMatch ? reactionMatch[1].trim() : '×';
                 const label = reactionMatch ? 'Reacciono' : 'Elimino una reaccion';
+                const reference = renderReactionReference(message, messageLookup);
                 return `<div class="reaction-card">
                     <span class="reaction-emoji">${escapeHtml(emoji)}</span>
-                    <span>${escapeHtml(label)}</span>
+                    <span class="reaction-copy">
+                        <span>${escapeHtml(label)}</span>
+                        ${reference}
+                    </span>
                 </div>`;
             }
 
@@ -6093,6 +6146,12 @@
             const previousScrollTop = messagesDiv.scrollTop;
             updateChatSearchMatches(contact);
 
+            const messageLookup = new Map();
+            contact.messages.forEach(message => {
+                const whatsappMessageId = String(message.whatsapp_message_id || '').trim();
+                if (whatsappMessageId) messageLookup.set(whatsappMessageId, message);
+            });
+
             messagesDiv.innerHTML = contact.messages.map(message => {
                 const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString('es', {
                     hour: '2-digit', minute: '2-digit'
@@ -6128,7 +6187,7 @@
                 const searchClass = matchIndex === chatSearchIndex && matchIndex >= 0 ? ' search-active' : '';
                 const searchAttr = matchIndex >= 0 ? ` data-search-index="${matchIndex}"` : '';
                 const agentStyle = messageAgent ? ` style="--agent-color:${escapeHtml(messageAgent.color)}"` : '';
-                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
+                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message, messageLookup)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
             if (chatSearchTerm) {
