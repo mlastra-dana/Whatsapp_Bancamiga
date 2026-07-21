@@ -1603,6 +1603,15 @@ def extraer_mensaje(msg):
     if msg_type == "button":
         return msg.get("button", {}).get("text", ""), "button"
 
+    if msg_type == "reaction":
+        reaction = msg.get("reaction") if isinstance(msg.get("reaction"), dict) else {}
+        emoji = str(reaction.get("emoji") or "").strip()
+        reacted_message_id = str(reaction.get("message_id") or "").strip()
+        if emoji:
+            detail = f" | {reacted_message_id}" if reacted_message_id else ""
+            return f"[Reaccion]: {emoji}{detail}", "reaction"
+        return "[Reaccion eliminada]", "reaction"
+
     if msg_type == "image":
         image_id = msg.get("image", {}).get("id")
         caption = str(msg.get("image", {}).get("caption") or "").strip()
@@ -2013,8 +2022,8 @@ def handle_whatsapp_webhook(event):
         telefono = msg["from"]
         mensaje, msg_type = extraer_mensaje(msg)
         guardar_mensaje(telefono, mensaje, "entrada", msg_type)
-        if msg_type == "call":
-            return response(200, {"success": True, "mode": "call_message"})
+        if msg_type in {"call", "reaction"}:
+            return response(200, {"success": True, "mode": msg_type})
 
     except Exception:
         logger.exception("Could not parse WhatsApp webhook")

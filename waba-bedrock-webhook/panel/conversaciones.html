@@ -1598,6 +1598,25 @@
             white-space: normal;
         }
 
+        .reaction-card {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            min-height: 36px;
+            padding: 7px 10px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(240, 80, 40, 0.18);
+            font-size: 13px;
+            font-weight: 750;
+            color: var(--muted);
+        }
+
+        .reaction-card .reaction-emoji {
+            font-size: 22px;
+            line-height: 1;
+        }
+
         .template-action-list {
             display: grid;
             gap: 6px;
@@ -5853,6 +5872,8 @@
             const callMatch = text.match(/^\[Llamada\]:\s*(.*)$/i);
             const contactMatch = text.match(/^\[Contacto\]:\s*([\s\S]*)$/i);
             const statusMatch = text.match(/^\[Estado WhatsApp\]:\s*(.*)$/i);
+            const reactionMatch = text.match(/^\[Reaccion\]:\s*([^|]+)(?:\|.*)?$/i);
+            const reactionRemovedMatch = text.match(/^\[Reaccion eliminada\]$/i);
 
             if (statusMatch) {
                 const detail = statusMatch[1].trim();
@@ -5863,6 +5884,15 @@
                 return `<div class="delivery-status-card">
                     <strong>No entregado</strong>
                     <span>${renderBodyText(readableDetail)}</span>
+                </div>`;
+            }
+
+            if (reactionMatch || reactionRemovedMatch) {
+                const emoji = reactionMatch ? reactionMatch[1].trim() : '×';
+                const label = reactionMatch ? 'Reacciono' : 'Elimino una reaccion';
+                return `<div class="reaction-card">
+                    <span class="reaction-emoji">${escapeHtml(emoji)}</span>
+                    <span>${escapeHtml(label)}</span>
                 </div>`;
             }
 
@@ -5993,7 +6023,7 @@
 
         function isRichMessageContent(message) {
             const text = formatTemplatePlaceholders(message.message).trim();
-            return message.msg_type === 'template' || /^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto|Estado WhatsApp)\]:/i.test(text);
+            return message.msg_type === 'template' || /^\[(Imagen|Video|Audio|Documento|Ubicacion|Llamada|Sticker|Contacto|Estado WhatsApp|Reaccion)\]:/i.test(text);
         }
 
         function isHiddenSystemMessage(message) {
