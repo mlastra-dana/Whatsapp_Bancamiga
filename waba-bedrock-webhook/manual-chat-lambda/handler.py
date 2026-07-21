@@ -1590,6 +1590,13 @@ def enviar_botones(telefono, texto, botones):
 
 
 def extraer_mensaje(msg):
+    if isinstance(msg.get("reaction"), dict):
+        reaction = msg.get("reaction")
+        emoji = str(reaction.get("emoji") or "").strip()
+        if emoji:
+            return f"[Reaccion]: {emoji}", "reaction"
+        return "[Reaccion eliminada]", "reaction"
+
     msg_type = msg.get("type")
 
     if msg_type == "text":
@@ -1618,13 +1625,6 @@ def extraer_mensaje(msg):
 
     if msg_type == "button":
         return msg.get("button", {}).get("text", ""), "button"
-
-    if msg_type == "reaction":
-        reaction = msg.get("reaction") if isinstance(msg.get("reaction"), dict) else {}
-        emoji = str(reaction.get("emoji") or "").strip()
-        if emoji:
-            return f"[Reaccion]: {emoji}", "reaction"
-        return "[Reaccion eliminada]", "reaction"
 
     if msg_type == "image":
         image_id = msg.get("image", {}).get("id")

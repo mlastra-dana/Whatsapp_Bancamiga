@@ -1632,6 +1632,28 @@
             font-weight: 850;
         }
 
+        .message-reactions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
+        }
+
+        .message-reaction-badge {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-width: 28px;
+            height: 24px;
+            padding: 0 8px;
+            border-radius: 999px;
+            background: rgba(255, 255, 255, 0.86);
+            border: 1px solid rgba(240, 80, 40, 0.2);
+            box-shadow: 0 1px 4px rgba(15, 23, 42, 0.12);
+            font-size: 16px;
+            line-height: 1;
+        }
+
         .template-action-list {
             display: grid;
             gap: 6px;
@@ -3763,6 +3785,7 @@
 
         function isNotifiableInboundMessage(message) {
             if (!message || message.direction !== 'inbound') return false;
+            if (isHiddenSystemMessage(message)) return false;
             if (message.msg_type === 'call' || /^\[Llamada\]:/i.test(String(message.message || ''))) {
                 return isAnswerableCall(message);
             }
@@ -5147,7 +5170,9 @@
             if (!contact || !hasValidConversationPhone(contact.phone)) return 0;
             const lastReadAt = readState[contact.phone] || '';
             return contact.messages.filter(message =>
-                message.direction === 'inbound' && compareTimestamp(message.timestamp, lastReadAt) > 0
+                message.direction === 'inbound'
+                    && !isHiddenSystemMessage(message)
+                    && compareTimestamp(message.timestamp, lastReadAt) > 0
             ).length;
         }
 
@@ -5159,7 +5184,7 @@
             Object.values(contacts).forEach(contact => {
                 if (readState[contact.phone]) return;
                 const latestInbound = [...contact.messages]
-                    .filter(message => message.direction === 'inbound')
+                    .filter(message => message.direction === 'inbound' && !isHiddenSystemMessage(message))
                     .sort((a, b) => compareTimestamp(b.timestamp, a.timestamp))[0];
                 if (latestInbound && latestInbound.timestamp) {
                     readState[contact.phone] = latestInbound.timestamp;
@@ -5180,7 +5205,7 @@
             const contact = contacts[normalizedPhone] || contacts[phone];
             if (!contact) return;
             const latestInbound = [...contact.messages]
-                .filter(message => message.direction === 'inbound')
+                .filter(message => message.direction === 'inbound' && !isHiddenSystemMessage(message))
                 .sort((a, b) => compareTimestamp(b.timestamp, a.timestamp))[0];
             if (!latestInbound || !latestInbound.timestamp) return;
             if (readState[contact.phone] && compareTimestamp(readState[contact.phone], latestInbound.timestamp) >= 0) {
@@ -5457,12 +5482,13 @@
                     };
                 }
                 contacts[phone].messages.push(message);
-                contacts[phone].messageCount++;
+                if (!isHiddenSystemMessage(message)) contacts[phone].messageCount++;
             });
 
             Object.values(contacts).forEach(contact => {
                 contact.messages.sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''));
-                const last = contact.messages[contact.messages.length - 1];
+                const visibleMessages = contact.messages.filter(message => !isHiddenSystemMessage(message));
+                const last = visibleMessages[visibleMessages.length - 1] || contact.messages[contact.messages.length - 1];
                 contact.lastMessage = last.message || '';
                 contact.lastTime = last.timestamp || '';
             });
@@ -5763,6 +5789,7 @@
 
             chatSearchMatches = contact.messages
                 .map((message, index) => ({ message, index }))
+                .filter(item => !isHiddenSystemMessage(item.message))
                 .filter(item => normalize(getMessageSearchText(item.message)).includes(term));
 
             if (!chatSearchMatches.length) {
@@ -5905,9 +5932,33 @@
             return `<span class="reaction-reference">a ${escapeHtml(author)}: ${escapeHtml(messageReactionPreview(referenced))}</span>`;
         }
 
-        function renderMessageContent(message, messageLookup = null) {
+        function extractReactionEmoji(message) {
+            const text = formatTemplatePlaceholders(message?.message || '').trim();
+            const reactionMatch = text.match(/^\[Reaccion\]:\s*([^\s|]+)(?:[\s\S]*)?$/i);
+            const reactionRemovedMatch = text.match(/^\[Reaccion eliminada\]$/i);
+            if (reactionMatch) return reactionMatch[1].trim();
+            if (reactionRemovedMatch) return '';
+            return '';
+        }
+
+        function renderAttachedReactions(message, reactionsByTarget) {
+            const whatsappMessageId = String(message?.whatsapp_message_id || '').trim();
+            if (!whatsappMessageId || !reactionsByTarget) return '';
+
+            const reactions = reactionsByTarget.get(whatsappMessageId) || [];
+            const badges = reactions
+                .map(extractReactionEmoji)
+                .filter(Boolean)
+                .map(emoji => `<span class="message-reaction-badge">${escapeHtml(emoji)}</span>`);
+            if (!badges.length) return '';
+
+            return `<div class="message-reactions">${badges.join('')}</div>`;
+        }
+
+        function renderMessageContent(message, messageLookup = null, reactionsByTarget = null) {
             const text = formatTemplatePlaceholders(message.message).trim();
             const templateActions = renderTemplateButtons(message);
+            const attachedReactions = renderAttachedReactions(message, reactionsByTarget);
             const renderBodyText = value => chatSearchTerm
                 ? renderSearchHighlightedText(value)
                 : escapeHtml(value);
@@ -6071,7 +6122,7 @@
                 </div>`;
             }
 
-            return `${renderSearchHighlightedText(text)}${templateActions}`;
+            return `${renderSearchHighlightedText(text)}${templateActions}${attachedReactions}`;
         }
 
         function isRichMessageContent(message) {
@@ -6080,7 +6131,8 @@
         }
 
         function isHiddenSystemMessage(message) {
-            return String(message?.msg_type || '') === 'entry_prompt';
+            return String(message?.msg_type || '') === 'entry_prompt'
+                || String(message?.msg_type || '') === 'reaction';
         }
 
         function setChatScrollPosition(messagesDiv, options) {
@@ -6147,12 +6199,23 @@
             updateChatSearchMatches(contact);
 
             const messageLookup = new Map();
+            const reactionsByTarget = new Map();
             contact.messages.forEach(message => {
                 const whatsappMessageId = String(message.whatsapp_message_id || '').trim();
                 if (whatsappMessageId) messageLookup.set(whatsappMessageId, message);
+                if (String(message.msg_type || '') === 'reaction') {
+                    const targetId = extractReactionTargetId(message);
+                    if (targetId) {
+                        const current = reactionsByTarget.get(targetId) || [];
+                        current.push(message);
+                        reactionsByTarget.set(targetId, current);
+                    }
+                }
             });
 
-            messagesDiv.innerHTML = contact.messages.map(message => {
+            const visibleMessages = contact.messages.filter(message => !isHiddenSystemMessage(message));
+
+            messagesDiv.innerHTML = visibleMessages.map(message => {
                 const time = message.timestamp ? new Date(message.timestamp).toLocaleTimeString('es', {
                     hour: '2-digit', minute: '2-digit'
                 }) : '';
@@ -6187,7 +6250,7 @@
                 const searchClass = matchIndex === chatSearchIndex && matchIndex >= 0 ? ' search-active' : '';
                 const searchAttr = matchIndex >= 0 ? ` data-search-index="${matchIndex}"` : '';
                 const agentStyle = messageAgent ? ` style="--agent-color:${escapeHtml(messageAgent.color)}"` : '';
-                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message, messageLookup)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
+                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message, messageLookup, reactionsByTarget)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
             if (chatSearchTerm) {
