@@ -5238,7 +5238,7 @@
 
         function getFilteredMessages() {
             return allMessages.filter(message =>
-                isMessageInDateRange(message) && !isHiddenSystemMessage(message)
+                isMessageInDateRange(message) && String(message?.msg_type || '') !== 'entry_prompt'
             );
         }
 
@@ -5955,10 +5955,9 @@
             return `<div class="message-reactions">${badges.join('')}</div>`;
         }
 
-        function renderMessageContent(message, messageLookup = null, reactionsByTarget = null) {
+        function renderMessageContent(message, messageLookup = null) {
             const text = formatTemplatePlaceholders(message.message).trim();
             const templateActions = renderTemplateButtons(message);
-            const attachedReactions = renderAttachedReactions(message, reactionsByTarget);
             const renderBodyText = value => chatSearchTerm
                 ? renderSearchHighlightedText(value)
                 : escapeHtml(value);
@@ -6122,7 +6121,7 @@
                 </div>`;
             }
 
-            return `${renderSearchHighlightedText(text)}${templateActions}${attachedReactions}`;
+            return `${renderSearchHighlightedText(text)}${templateActions}`;
         }
 
         function isRichMessageContent(message) {
@@ -6250,7 +6249,8 @@
                 const searchClass = matchIndex === chatSearchIndex && matchIndex >= 0 ? ' search-active' : '';
                 const searchAttr = matchIndex >= 0 ? ` data-search-index="${matchIndex}"` : '';
                 const agentStyle = messageAgent ? ` style="--agent-color:${escapeHtml(messageAgent.color)}"` : '';
-                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message, messageLookup, reactionsByTarget)}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
+                const attachedReactions = renderAttachedReactions(message, reactionsByTarget);
+                return `<div class="message ${message.direction || 'inbound'}${messageTypeClass}${searchClass}"${searchAttr}${agentStyle}><div class="direction">${renderAgentChip(messageAgent, 'small message-agent')}${direction}</div><div class="${contentClass}">${renderMessageContent(message, messageLookup)}${attachedReactions}</div><div class="time">${escapeHtml(date)} ${escapeHtml(time)}</div></div>`;
             }).join('');
 
             if (chatSearchTerm) {
