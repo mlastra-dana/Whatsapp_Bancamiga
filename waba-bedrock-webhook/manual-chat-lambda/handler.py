@@ -61,6 +61,7 @@ TEMPLATES_STATE_KEY = "__quick_templates__"
 CONTACT_KEY_PREFIX = "contact#"
 READ_STATE_KEY_PREFIX = "read#"
 AGENT_KEY_PREFIX = "agent#"
+WEB_CHAT_KEY_PREFIX = "web#"
 DEFAULT_ABSENCE_MESSAGE = (
     "Gracias por escribirnos. En este momento no hay un asesor disponible. "
     "Te responderemos apenas retomemos la atencion."
@@ -209,6 +210,20 @@ def save_absence_bot_config(enabled, message):
 
 def normalize_phone(value):
     return "".join(char for char in str(value or "") if char.isdigit())
+
+
+def normalize_web_session_id(value):
+    clean_value = re.sub(r"[^A-Za-z0-9_-]", "", str(value or "").strip())
+    return clean_value[:120]
+
+
+def web_chat_phone(session_id):
+    clean_session_id = normalize_web_session_id(session_id)
+    return f"{WEB_CHAT_KEY_PREFIX}{clean_session_id}" if clean_session_id else ""
+
+
+def is_web_chat_phone(value):
+    return str(value or "").startswith(WEB_CHAT_KEY_PREFIX)
 
 
 def get_contact_phone_value(data):
@@ -632,6 +647,7 @@ def guardar_mensaje(
     client_message_id="",
     whatsapp_message_id="",
     reaction_message_id="",
+    canal="whatsapp",
 ):
     if conversations_table is None:
         logger.warning("CONVERSATIONS_TABLE_NAME is not configured; message was not logged")
@@ -643,7 +659,7 @@ def guardar_mensaje(
         "timestamp": now_iso(),
         "mensaje": str(mensaje)[:1000],
         "tipo": tipo,
-        "canal": "whatsapp",
+        "canal": canal,
         "msg_type": msg_type,
     }
     if agent_username:
@@ -1401,6 +1417,11 @@ def normalizar_log_para_panel(item):
         "source_flow": item.get("source_flow") or "",
         "template_buttons": template_buttons,
         "template_payload": template_payload,
+        "web_session_id": item.get("web_session_id") or "",
+        "web_site_id": item.get("web_site_id") or "",
+        "web_page_url": item.get("web_page_url") or "",
+        "web_advisor_id": item.get("web_advisor_id") or "",
+        "web_advisor_name": item.get("web_advisor_name") or "",
     }
 
 
@@ -1778,6 +1799,65 @@ def list_conversations(event):
     return response(200, normalized_items)
 
 
+def receive_web_chat_message(event):
+    if conversations_table is None:
+        return response(500, {"error": "CONVERSATIONS_TABLE_NAME is not configured"})
+
+    body = parse_body(event)
+    session_id = normalize_web_session_id(body.get("session_id"))
+    message = str(body.get("message") or "").strip()
+
+    if not session_id or not message:
+        return response(400, {"error": "session_id and message are required"})
+
+    telefono = web_chat_phone(session_id)
+    item = {
+        "telefono": telefono,
+        "timestamp": now_iso(),
+        "mensaje": message[:1000],
+        "tipo": "entrada",
+        "canal": "web",
+        "msg_type": "web",
+        "provider": "waba-widget",
+        "web_session_id": session_id,
+        "web_site_id": str(body.get("site_id") or "")[:120],
+        "web_page_url": str(body.get("page_url") or "")[:500],
+        "web_advisor_id": str(body.get("advisor_id") or "")[:120],
+        "web_advisor_name": str(body.get("advisor_name") or "")[:160],
+    }
+    conversations_table.put_item(Item=item)
+
+    return response(200, {
+        "success": True,
+        "session_id": session_id,
+        "phone": telefono,
+        "message": normalizar_log_para_panel(item),
+    })
+
+
+def list_web_chat_messages(event):
+    if conversations_table is None:
+        return response(500, {"error": "CONVERSATIONS_TABLE_NAME is not configured"})
+
+    params = event.get("queryStringParameters") or {}
+    session_id = normalize_web_session_id(params.get("session_id"))
+    if not session_id:
+        return response(400, {"error": "session_id is required"})
+
+    telefono = web_chat_phone(session_id)
+    result = conversations_table.query(
+        KeyConditionExpression=Key("telefono").eq(telefono),
+        ScanIndexForward=True,
+    )
+    messages = [normalizar_log_para_panel(item) for item in result.get("Items", [])]
+    return response(200, {
+        "success": True,
+        "session_id": session_id,
+        "phone": telefono,
+        "messages": messages,
+    })
+
+
 def send_message_from_panel(event):
     body = parse_body(event)
     telefono = str(body.get("phone", "")).strip()
@@ -1790,6 +1870,34 @@ def send_message_from_panel(event):
         return response(400, {"error": "phone and message are required"})
 
     try:
+        if is_web_chat_phone(telefono):
+            logged_item = guardar_mensaje(
+                telefono,
+                mensaje,
+                "salida",
+                "manual",
+                agent_username,
+                agent_name,
+                client_message_id,
+                canal="web",
+            )
+            mark_conversation_attended(telefono)
+            return response(200, {
+                "success": True,
+                "channel": "web",
+                "message": normalizar_log_para_panel(logged_item) if logged_item else {
+                    "phone_number": telefono,
+                    "timestamp": now_iso(),
+                    "direction": "outbound",
+                    "message": mensaje,
+                    "msg_type": "manual",
+                    "canal": "web",
+                    "client_message_id": client_message_id,
+                    "agent_username": agent_username,
+                    "agent_name": agent_name,
+                },
+            })
+
         result = enviar_whatsapp(telefono, mensaje)
         sent_messages = result.get("messages") if isinstance(result, dict) else []
         whatsapp_message_id = ""
@@ -2254,6 +2362,10 @@ def lambda_handler(event, context):
             return handle_verification(event)
         if method == "GET" and path == "/conversations":
             return list_conversations(event)
+        if method == "GET" and path == "/web-chat/messages":
+            return list_web_chat_messages(event)
+        if method == "POST" and path == "/web-chat/messages":
+            return receive_web_chat_message(event)
         if method == "GET" and path == "/media":
             return proxy_media(event)
         if method == "POST" and path == "/send-message":
