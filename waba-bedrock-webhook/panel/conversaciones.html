@@ -3388,7 +3388,12 @@
             return String(phone || '').replace(/\D/g, '');
         }
 
+        function isWebConversationPhone(phone) {
+            return String(phone || '').startsWith('web#');
+        }
+
         function hasValidConversationPhone(phone) {
+            if (isWebConversationPhone(phone)) return true;
             return normalizePhone(phone).length > 0;
         }
 
@@ -3516,11 +3521,44 @@
         }
 
         function getContactInfo(phone) {
+            if (isWebConversationPhone(phone)) return null;
             const normalized = normalizePhone(phone);
             return contactsMap[normalized] || contactsMap[normalized.replace(/^58/, '')] || null;
         }
 
+        function getWebContactMessage(phone) {
+            const contact = contacts[phone];
+            if (!contact || !Array.isArray(contact.messages)) return null;
+            return contact.messages.find(message => message.canal === 'web' || message.web_session_id) || null;
+        }
+
+        function getWebSiteLabel(contact) {
+            const message = contact && Array.isArray(contact.messages)
+                ? contact.messages.find(item => item.web_site_id || item.web_page_url)
+                : null;
+            const siteId = String(message?.web_site_id || '').trim();
+            if (siteId) return siteId.replace(/-/g, ' ');
+
+            const pageUrl = String(message?.web_page_url || '').trim();
+            if (!pageUrl) return '';
+            try {
+                return new URL(pageUrl).hostname.replace(/^www\./, '');
+            } catch (error) {
+                return '';
+            }
+        }
+
+        function getWebContactName(phone) {
+            if (!isWebConversationPhone(phone)) return '';
+            const message = getWebContactMessage(phone);
+            const advisorName = String(message?.web_advisor_name || '').trim();
+            return advisorName ? `Chat web · ${advisorName}` : 'Chat web';
+        }
+
         function getContactName(phone) {
+            if (isWebConversationPhone(phone)) {
+                return getWebContactName(phone);
+            }
             const contact = getContactInfo(phone);
             const savedName = contact
                 ? contact.name || contact.nombre || [contact.first_name, contact.last_name].filter(Boolean).join(' ')
@@ -5546,6 +5584,7 @@
             const timeStr = contact.lastTime ? new Date(contact.lastTime).toLocaleString('es', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             }) : '';
+            const isWebContact = isWebConversationPhone(contact.phone);
             const contactName = getContactName(contact.phone);
             const activeClass = contact.phone === selectedPhone ? ' active' : '';
             const unreadCount = getUnreadCount(contact);
@@ -5553,9 +5592,14 @@
             const contactAgent = getContactAgent(contact);
             const agentClass = contactAgent ? ' has-agent' : '';
             const agentStyle = contactAgent ? ` style="--agent-color:${escapeHtml(contactAgent.color)}"` : '';
+            const webSiteLabel = isWebContact ? getWebSiteLabel(contact) : '';
             const meta = contact.messageCount
-                ? `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}`
-                : `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}Contacto guardado`;
+                ? isWebContact
+                    ? `Canal web${webSiteLabel ? ' · ' + escapeHtml(webSiteLabel) : ''} · ${contact.messageCount} mensajes · ${escapeHtml(timeStr)}`
+                    : `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}${contact.messageCount} mensajes · ${escapeHtml(timeStr)}`
+                : isWebContact
+                    ? `Canal web${webSiteLabel ? ' · ' + escapeHtml(webSiteLabel) : ''}`
+                    : `${contactName ? escapeHtml(contact.phone) + ' · ' : ''}Contacto guardado`;
             const preview = contact.lastMessage
                 ? `<div class="last-msg">${escapeHtml(contact.lastMessage.substring(0, 80))}</div>`
                 : '';
@@ -5565,7 +5609,7 @@
             ].filter(Boolean).join('');
             return `<button class="contact-item${activeClass}${unreadClass}${agentClass}"${agentStyle} data-phone="${escapeHtml(contact.phone)}">
                 <div class="contact-row">
-                    <div class="phone">${contactName ? '👤 ' + renderGlobalSearchHighlightedText(contactName) : '📱 ' + renderGlobalSearchHighlightedText(contact.phone)}</div>
+                    <div class="phone">${isWebContact ? '🌐 ' : contactName ? '👤 ' : '📱 '}${renderGlobalSearchHighlightedText(contactName || contact.phone)}</div>
                     ${indicators ? `<div class="contact-indicators">${indicators}</div>` : ''}
                 </div>
                 <div class="meta">${meta}</div>
@@ -5575,16 +5619,18 @@
 
         function renderMessageSearchResult(result) {
             const { contact, message } = result;
+            const isWebContact = isWebConversationPhone(contact.phone);
             const contactName = getContactName(contact.phone) || contact.phone;
             const timeStr = message.timestamp ? new Date(message.timestamp).toLocaleString('es', {
                 month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
             }) : '';
             const snippet = getMessageSearchSnippet(message);
+            const webSiteLabel = isWebContact ? getWebSiteLabel(contact) : '';
             return `<button class="contact-item message-search-result" data-phone="${escapeHtml(contact.phone)}" data-message-id="${escapeHtml(messageId(message))}">
                 <div class="contact-row">
                     <div class="phone">${renderGlobalSearchHighlightedText(contactName)}</div>
                 </div>
-                <div class="meta">${escapeHtml(contact.phone)} · ${escapeHtml(timeStr)}</div>
+                <div class="meta">${isWebContact ? `Canal web${webSiteLabel ? ' · ' + escapeHtml(webSiteLabel) : ''}` : escapeHtml(contact.phone)} · ${escapeHtml(timeStr)}</div>
                 <div class="last-msg">${renderGlobalSearchHighlightedText(snippet)}</div>
             </button>`;
         }
@@ -6162,17 +6208,24 @@
             document.getElementById('composer-panel').style.display = 'block';
             renderTemplateChips();
 
+            const isWebContact = isWebConversationPhone(selectedPhone);
             const contactName = getContactName(selectedPhone);
             const contactAgent = getContactAgent(contact);
             const headerBar = document.getElementById('chat-header-bar');
             headerBar.style.borderLeft = contactAgent ? `4px solid ${contactAgent.color}` : '';
-            document.getElementById('edit-contact-btn').style.display = contactName ? 'none' : 'inline-flex';
+            const editContactBtn = document.getElementById('edit-contact-btn');
+            const callButton = document.querySelector('.chat-header .call-btn');
+            editContactBtn.style.display = isWebContact || contactName ? 'none' : 'inline-flex';
+            if (callButton) callButton.style.display = isWebContact ? 'none' : 'inline-flex';
             document.getElementById('chat-header').textContent = contactName
                 ? contactName
                 : selectedPhone;
-            document.getElementById('chat-subtitle').textContent = contactName
-                ? `${selectedPhone} · ${contact.messageCount} mensajes`
-                : `${contact.messageCount} mensajes`;
+            const webSiteLabel = isWebContact ? getWebSiteLabel(contact) : '';
+            document.getElementById('chat-subtitle').textContent = isWebContact
+                ? `Canal web${webSiteLabel ? ' · ' + webSiteLabel : ''} · ${contact.messageCount} mensajes`
+                : contactName
+                    ? `${selectedPhone} · ${contact.messageCount} mensajes`
+                    : `${contact.messageCount} mensajes`;
 
             const messagesDiv = document.getElementById('chat-messages');
             if (contact.messages.length === 0) {
