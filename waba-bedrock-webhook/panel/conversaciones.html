@@ -6276,12 +6276,13 @@
                 }) : '';
                 const advisorLabel = message.agent_name || message.agent_username || 'Asesor';
                 const messageAgent = getMessageAgent(message);
+                const automaticMessageTypes = ['bank_entry', 'entry_prompt', 'absence'];
                 const direction = message.direction === 'inbound'
                     ? '👤 Cliente'
                     : message.msg_type === 'template'
                         ? '✍️ Plantilla DANA'
-                    : message.msg_type === 'absence'
-                        ? '🤖 Bot'
+                    : automaticMessageTypes.includes(String(message.msg_type || ''))
+                        ? '🤖 Mensaje automático'
                         : `✍️ ${advisorLabel}`;
                 const contentClass = isRichMessageContent(message)
                     ? 'message-content rich-message'

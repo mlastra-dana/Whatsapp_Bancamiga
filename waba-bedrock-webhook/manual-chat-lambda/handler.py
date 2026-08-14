@@ -1092,15 +1092,27 @@ def conversation_has_manual_attention(telefono):
             ScanIndexForward=False,
             Limit=50,
         )
+        seen_current_inbound = False
         for item in result.get("Items", []):
             tipo = item.get("tipo") or item.get("direction")
+            if tipo in {"entrada", "inbound"}:
+                if seen_current_inbound:
+                    return False
+                seen_current_inbound = True
+                continue
+
             if tipo not in {"salida", "outbound", "manual"}:
                 continue
 
             msg_type = str(item.get("msg_type") or "").strip()
+            provider = str(item.get("provider") or "").strip().lower()
+            if provider == "dana" or msg_type in {"template", "status", "bank_entry", "absence"}:
+                return False
+
             has_agent = bool(item.get("agent_username") or item.get("agent_name"))
             if has_agent or msg_type in {"manual", "image", "video", "audio", "document", "sticker"}:
                 return True
+            return False
     except Exception:
         logger.exception("Could not inspect conversation manual attention")
 
@@ -2223,7 +2235,21 @@ def handle_whatsapp_webhook(event):
             save_user(telefono, "default", [])
             send_entry_prompt(telefono)
             return response(200, {"success": True, "mode": "entry_prompt"})
-        return response(200, {"success": True, "mode": "bancamiga"})
+        if conversation_has_manual_attention(telefono):
+            return response(200, {"success": True, "mode": "bancamiga"})
+        if "logistica" in mensaje_lower:
+            save_user(telefono, "logistica", {"step": "menu"})
+            enviar_botones(
+                telefono,
+                "🚚 *Asistente de Logística*\n\nHola 👋\n¿Qué deseas hacer?",
+                ["📦 Iniciar despacho", "🔄 Actualizar etapa"],
+            )
+            return response(200, {"success": True, "mode": "logistica"})
+        if has_bank_intent(mensaje_lower):
+            enviar_whatsapp(telefono, DEFAULT_BANK_MESSAGE)
+            return response(200, {"success": True, "mode": "bancamiga"})
+        send_entry_prompt(telefono)
+        return response(200, {"success": True, "mode": "entry_prompt"})
 
     if estado == "ia":
         # Legacy safety: old users may still have estado=ia in DynamoDB.
