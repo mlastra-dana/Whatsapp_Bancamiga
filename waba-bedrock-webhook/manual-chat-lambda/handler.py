@@ -158,6 +158,22 @@ def has_bank_intent(text: str) -> bool:
     )
 
 
+def is_entry_prompt_intent(text: str) -> bool:
+    normalized = normalize_text(text).strip()
+    normalized = re.sub(r"[^\w\s]", " ", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+    return normalized in {
+        "hola",
+        "hello",
+        "hi",
+        "buenas",
+        "buenos dias",
+        "buen dia",
+        "buenas tardes",
+        "buenas noches",
+    }
+
+
 def get_user(telefono):
     try:
         res = state_table.get_item(Key={"telefono": telefono})
@@ -2248,8 +2264,10 @@ def handle_whatsapp_webhook(event):
         if has_bank_intent(mensaje_lower):
             enviar_whatsapp(telefono, DEFAULT_BANK_MESSAGE)
             return response(200, {"success": True, "mode": "bancamiga"})
-        send_entry_prompt(telefono)
-        return response(200, {"success": True, "mode": "entry_prompt"})
+        if is_entry_prompt_intent(mensaje_lower):
+            send_entry_prompt(telefono)
+            return response(200, {"success": True, "mode": "entry_prompt"})
+        return response(200, {"success": True, "mode": "bancamiga"})
 
     if estado == "ia":
         # Legacy safety: old users may still have estado=ia in DynamoDB.
@@ -2372,8 +2390,10 @@ def handle_whatsapp_webhook(event):
 
             return response(200, {"success": True})
 
-    send_entry_prompt(telefono)
-    return response(200, {"success": True})
+    if is_entry_prompt_intent(mensaje_lower):
+        send_entry_prompt(telefono)
+        return response(200, {"success": True, "mode": "entry_prompt"})
+    return response(200, {"success": True, "mode": "logged_only"})
 
 
 def lambda_handler(event, context):
